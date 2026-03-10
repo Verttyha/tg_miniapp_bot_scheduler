@@ -1,0 +1,106 @@
+from __future__ import annotations
+
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+import uvicorn
+from aiogram import Bot, Dispatcher
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
+from aiogram.types import Update
+from fastapi import Depends, FastAPI, Request
+from fastapi.responses import FileResponse, RedirectResponse
+from sqlalchemy.ext.asyncio import async_sessionmaker
+
+from scheduler_app.api.router import api_router
+from scheduler_app.api.routes.integrations import oauth_router
+from scheduler_app.bot.handlers import build_router as build_bot_router
+from scheduler_app.database import build_engine
+from scheduler_app.deps import get_current_user, get_session
+from scheduler_app.models import Base, User
+from scheduler_app.security import TokenCipher
+from scheduler_app.services.presenters import user_read, workspace_read
+from scheduler_app.services.scheduler import SchedulerRunner
+from scheduler_app.services.workspaces import WorkspaceService
+from scheduler_app.settings import Settings, get_settings
+
+
+def create_app(settings: Settings | None = None) -> FastAPI:
+    runtime_settings = settings or get_settings()
+    engine = build_engine(runtime_settings)
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    cipher = TokenCipher(runtime_settings.app_secret)
+    bot = Bot(
+        runtime_settings.bot_token,
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+    )
+    dispatcher = Dispatcher()
+    dispatcher.include_router(build_bot_router(session_factory, runtime_settings))
+    scheduler = SchedulerRunner(session_factory, runtime_settings, cipher)
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        async with engine.begin() as connection:
+            await connection.run_sync(Base.metadata.create_all)
+        scheduler.start()
+        try:
+            yield
+        finally:
+            await scheduler.stop()
+            await bot.session.close()
+            await engine.dispose()
+
+    app = FastAPI(title=runtime_settings.app_name, lifespan=lifespan)
+    app.state.settings = runtime_settings
+    app.state.engine = engine
+    app.state.session_factory = session_factory
+    app.state.cipher = cipher
+    app.state.bot = bot
+    app.state.dispatcher = dispatcher
+    app.state.scheduler = scheduler
+
+    app.include_router(api_router, prefix=runtime_settings.api_prefix)
+    app.include_router(oauth_router)
+
+    @app.get("/")
+    async def root() -> RedirectResponse:
+        return RedirectResponse(url="/app")
+
+    @app.get("/health")
+    async def health() -> dict[str, str]:
+        return {"status": "ok"}
+
+    @app.get("/api/me")
+    async def current_session(
+        current_user: User = Depends(get_current_user),
+        session=Depends(get_session),
+    ) -> dict:
+        workspaces = await WorkspaceService(session).list_for_user(current_user)
+        return {
+            "user": user_read(current_user).model_dump(),
+            "workspaces": [workspace_read(workspace).model_dump() for workspace in workspaces],
+        }
+
+    @app.post("/webhooks/telegram")
+    async def telegram_webhook(request: Request) -> dict[str, bool]:
+        update = Update.model_validate(await request.json())
+        await dispatcher.feed_update(bot, update)
+        return {"ok": True}
+
+    @app.get("/app")
+    @app.get("/app/{path:path}")
+    async def serve_miniapp(path: str = ""):
+        dist_dir = runtime_settings.frontend_dist_dir
+        requested_path = dist_dir / path if path else dist_dir / "index.html"
+        if path and requested_path.exists() and requested_path.is_file():
+            return FileResponse(requested_path)
+        return FileResponse(dist_dir / "index.html")
+
+    return app
+
+
+app = create_app()
+
+
+def run() -> None:
+    uvicorn.run("scheduler_app.main:app", host="0.0.0.0", port=8000, reload=True)

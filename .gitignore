@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+node_modules/
+dist/
+build/
+*.pyc
+data/*.db
+data/*.sqlite3
+apps/server/scheduler_app/static/app/assets/
+apps/server/scheduler_app/static/app/.vite/
+memory-bank/

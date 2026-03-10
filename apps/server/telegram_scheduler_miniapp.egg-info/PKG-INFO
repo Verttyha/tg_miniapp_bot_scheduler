@@ -1,0 +1,94 @@
+Metadata-Version: 2.4
+Name: telegram-scheduler-miniapp
+Version: 0.1.0
+Summary: Single-service Telegram scheduler with Mini App, bot, SQLite, and calendar integrations.
+Requires-Python: >=3.13
+Description-Content-Type: text/markdown
+Requires-Dist: aiogram<4.0.0,>=3.25.0
+Requires-Dist: aiosqlite<1.0.0,>=0.20.0
+Requires-Dist: caldav<3.0.0,>=2.1.1
+Requires-Dist: cryptography<46.0.0,>=44.0.0
+Requires-Dist: fastapi<1.0.0,>=0.128.0
+Requires-Dist: httpx<1.0.0,>=0.28.0
+Requires-Dist: icalendar<7.0.0,>=6.1.0
+Requires-Dist: pydantic-settings<3.0.0,>=2.10.0
+Requires-Dist: sqlalchemy<3.0.0,>=2.0.40
+Requires-Dist: uvicorn[standard]<1.0.0,>=0.35.0
+Provides-Extra: dev
+Requires-Dist: pytest<9.0.0,>=8.4.0; extra == "dev"
+Requires-Dist: pytest-asyncio<2.0.0,>=1.1.0; extra == "dev"
+Requires-Dist: pytest-cov<7.0.0,>=6.2.0; extra == "dev"
+Requires-Dist: respx<1.0.0,>=0.22.0; extra == "dev"
+
+# Telegram Scheduler Mini App
+
+Single-service Telegram scheduler that combines:
+
+- FastAPI API
+- Telegram bot webhook handlers
+- React Mini App served by the same process
+- SQLite persistence
+- Google/Yandex calendar integration adapters
+- In-process scheduler for reminders and poll auto-resolution
+
+## Stack
+
+- Backend: FastAPI, aiogram, SQLAlchemy async, SQLite
+- Frontend: React, TypeScript, Vite, Telegram Mini Apps SDK
+- Integrations: Google Calendar REST, Yandex Calendar CalDAV adapter
+
+## Quick Start
+
+1. Create and activate a virtual environment.
+2. Install Python dependencies:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python -m pip install -e .[dev]
+```
+
+3. Install Mini App dependencies:
+
+```powershell
+Set-Location apps\miniapp
+cmd /c npm install
+cmd /c npm run build
+Set-Location ..\..
+```
+
+4. Copy `.env.example` to `.env` and fill in at least:
+
+- `APP_SECRET`
+- `BOT_TOKEN`
+- `BOT_USERNAME`
+- `BASE_URL`
+
+5. Run the service:
+
+```powershell
+.\.venv\Scripts\python -m uvicorn scheduler_app.main:app --reload
+```
+
+6. Open the Mini App shell:
+
+- Local: [http://localhost:8000/app](http://localhost:8000/app)
+
+## Main Flows
+
+- `POST /api/auth/telegram/init-data` validates Telegram `initData` and returns a signed session token.
+- `POST /webhooks/telegram` handles `/start` in private chat and `/setup` in groups.
+- `POST /api/workspaces/{id}/events` creates events and fans them out to active participant calendars.
+- `POST /api/workspaces/{id}/polls` creates vote-based scheduling polls.
+- In-process scheduler finalizes due polls and sends due reminders.
+
+## Testing
+
+```powershell
+.\.venv\Scripts\python -m pytest -q
+```
+
+## Notes
+
+- SQLite is intended for a single-instance deployment.
+- The Figma file is still pending access; current UI is requirements-based.
+- Memory Bank files are committed under `memory-bank/` because the MCP Memory Bank path initialization is currently failing on this Windows setup.
