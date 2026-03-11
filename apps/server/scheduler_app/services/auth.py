@@ -9,6 +9,7 @@ from scheduler_app.schemas import AuthResponse
 from scheduler_app.security import SecurityError, build_session_token, validate_telegram_init_data
 from scheduler_app.services.common import ServiceError
 from scheduler_app.services.presenters import user_read, workspace_read
+from scheduler_app.services.workspaces import WorkspaceService
 from scheduler_app.settings import Settings
 
 
@@ -40,18 +41,14 @@ class AuthService:
 
         await self.session.commit()
         await self.session.refresh(user)
-        memberships = await self.session.scalars(
-            select(WorkspaceMember)
-            .where(WorkspaceMember.user_id == user.id)
-            .options(
-                selectinload(WorkspaceMember.workspace)
-                .selectinload(Workspace.members)
-                .selectinload(WorkspaceMember.user),
-            )
-        )
-        workspaces = [workspace_read(item.workspace) for item in memberships]
+        workspaces = await self._load_workspaces_for_user(user.id)
+        if not workspaces:
+            joined_workspace = await WorkspaceService(self.session).auto_join_single_workspace(user)
+            if joined_workspace:
+                await self.session.commit()
+                workspaces = await self._load_workspaces_for_user(user.id)
         token = build_session_token(user.id, self.settings.app_secret)
-        return AuthResponse(access_token=token, user=user_read(user), workspaces=workspaces)
+        return AuthResponse(access_token=token, user=user_read(user), workspaces=[workspace_read(item) for item in workspaces])
 
     async def _upsert_user(self, user_payload: dict) -> User:
         telegram_user_id = int(user_payload["id"])
@@ -66,3 +63,15 @@ class AuthService:
         user.language_code = user_payload.get("language_code")
         await self.session.flush()
         return user
+
+    async def _load_workspaces_for_user(self, user_id: int) -> list[Workspace]:
+        memberships = await self.session.scalars(
+            select(WorkspaceMember)
+            .where(WorkspaceMember.user_id == user_id)
+            .options(
+                selectinload(WorkspaceMember.workspace)
+                .selectinload(Workspace.members)
+                .selectinload(WorkspaceMember.user),
+            )
+        )
+        return [item.workspace for item in memberships]

@@ -75,7 +75,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         current_user: User = Depends(get_current_user),
         session=Depends(get_session),
     ) -> dict:
-        workspaces = await WorkspaceService(session).list_for_user(current_user)
+        service = WorkspaceService(session)
+        workspaces = await service.list_for_user(current_user)
+        if not workspaces:
+            joined_workspace = await service.auto_join_single_workspace(current_user)
+            if joined_workspace:
+                await session.commit()
+                workspaces = await service.list_for_user(current_user)
         return {
             "user": user_read(current_user).model_dump(),
             "workspaces": [workspace_read(workspace).model_dump() for workspace in workspaces],

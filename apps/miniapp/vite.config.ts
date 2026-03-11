@@ -2,7 +2,8 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { resolve } from "node:path";
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
+  base: command === "build" ? "/app/" : "/",
   plugins: [react()],
   build: {
     outDir: resolve(__dirname, "../server/scheduler_app/static/app"),
@@ -16,4 +17,4 @@ export default defineConfig({
       "/webhooks": "http://localhost:8000"
     }
   }
-});
+}));

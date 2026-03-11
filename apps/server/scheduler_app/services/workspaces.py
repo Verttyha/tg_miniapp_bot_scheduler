@@ -25,6 +25,37 @@ class WorkspaceService:
         )
         return [item.workspace for item in memberships]
 
+    async def auto_join_single_workspace(self, user: User) -> Workspace | None:
+        existing_membership = await self.session.scalar(
+            select(WorkspaceMember).where(WorkspaceMember.user_id == user.id)
+        )
+        if existing_membership:
+            return None
+
+        workspaces = (
+            await self.session.scalars(
+                select(Workspace).options(selectinload(Workspace.members).selectinload(WorkspaceMember.user))
+            )
+        ).all()
+        if len(workspaces) != 1:
+            return None
+
+        workspace = workspaces[0]
+        self.session.add(
+            WorkspaceMember(
+                workspace_id=workspace.id,
+                user_id=user.id,
+                role=WorkspaceRole.MEMBER.value,
+            )
+        )
+        await self.session.flush()
+        refreshed = await self.session.scalar(
+            select(Workspace)
+            .where(Workspace.id == workspace.id)
+            .options(selectinload(Workspace.members).selectinload(WorkspaceMember.user))
+        )
+        return refreshed or workspace
+
     async def join_workspace(self, user: User, workspace_id: int) -> Workspace:
         workspace = await self.session.scalar(
             select(Workspace)

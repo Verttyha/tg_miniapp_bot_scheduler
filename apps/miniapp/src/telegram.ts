@@ -19,20 +19,29 @@ declare global {
 }
 
 export async function initTelegramApp(): Promise<string> {
-  init();
-  if (mountThemeParamsSync.isAvailable()) {
-    mountThemeParamsSync();
+  if (!window.Telegram?.WebApp) {
+    return "";
   }
-  if (bindThemeParamsCssVars.isAvailable()) {
-    bindThemeParamsCssVars();
+
+  try {
+    init();
+    if (mountThemeParamsSync.isAvailable()) {
+      mountThemeParamsSync();
+    }
+    if (bindThemeParamsCssVars.isAvailable()) {
+      bindThemeParamsCssVars();
+    }
+    if (mountViewport.isAvailable()) {
+      await mountViewport();
+    }
+    if (bindViewportCssVars.isAvailable()) {
+      bindViewportCssVars();
+    }
+  } catch (error) {
+    console.warn("Telegram SDK unavailable outside Telegram environment", error);
   }
-  if (mountViewport.isAvailable()) {
-    await mountViewport();
-  }
-  if (bindViewportCssVars.isAvailable()) {
-    bindViewportCssVars();
-  }
-  window.Telegram?.WebApp?.ready();
-  window.Telegram?.WebApp?.expand();
-  return window.Telegram?.WebApp?.initData ?? "";
+
+  window.Telegram.WebApp.ready();
+  window.Telegram.WebApp.expand();
+  return window.Telegram.WebApp.initData ?? "";
 }
