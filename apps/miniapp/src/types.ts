@@ -66,6 +66,7 @@ export interface Poll {
   options: PollOption[];
   vote_totals: Record<number, number>;
   user_vote_option_id: number | null;
+  has_chat_poll: boolean;
 }
 
 export interface CalendarOption {

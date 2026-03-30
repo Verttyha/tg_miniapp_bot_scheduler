@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from pathlib import Path
+import logging
 
 import uvicorn
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
+from aiogram.exceptions import TelegramAPIError
 from aiogram.enums import ParseMode
 from aiogram.types import Update
 from fastapi import Depends, FastAPI, Request
@@ -24,6 +25,21 @@ from scheduler_app.services.scheduler import SchedulerRunner
 from scheduler_app.services.workspaces import WorkspaceService
 from scheduler_app.settings import Settings, get_settings
 
+logger = logging.getLogger(__name__)
+
+
+async def sync_telegram_webhook(bot: Bot, dispatcher: Dispatcher, settings: Settings) -> None:
+    if not settings.should_sync_telegram_webhook:
+        return
+    try:
+        await bot.set_webhook(
+            url=settings.telegram_webhook_url,
+            allowed_updates=dispatcher.resolve_used_update_types(),
+        )
+        logger.info("Telegram webhook synced to %s", settings.telegram_webhook_url)
+    except TelegramAPIError as exc:
+        logger.warning("Telegram webhook sync failed: %s", exc)
+
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     runtime_settings = settings or get_settings()
@@ -36,12 +52,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     dispatcher = Dispatcher()
     dispatcher.include_router(build_bot_router(session_factory, runtime_settings))
-    scheduler = SchedulerRunner(session_factory, runtime_settings, cipher)
+    scheduler = SchedulerRunner(session_factory, runtime_settings, cipher, bot)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         async with engine.begin() as connection:
             await connection.run_sync(Base.metadata.create_all)
+        await sync_telegram_webhook(bot, dispatcher, runtime_settings)
         scheduler.start()
         try:
             yield

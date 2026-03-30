@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from aiogram import Bot
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from scheduler_app.security import TokenCipher
@@ -20,10 +21,12 @@ class SchedulerRunner:
         session_factory: async_sessionmaker,
         settings: Settings,
         cipher: TokenCipher,
+        bot: Bot,
     ):
         self.session_factory = session_factory
         self.settings = settings
         self.cipher = cipher
+        self.bot = bot
         self._task: asyncio.Task | None = None
         self._stop_event = asyncio.Event()
 
@@ -42,7 +45,7 @@ class SchedulerRunner:
 
     async def tick(self) -> None:
         async with self.session_factory() as session:
-            poll_service = PollService(session, self.settings, self.cipher)
+            poll_service = PollService(session, self.settings, self.cipher, bot=self.bot)
             notification_service = NotificationService(session, self.settings)
             await poll_service.resolve_due_polls()
             await notification_service.dispatch_due_jobs()

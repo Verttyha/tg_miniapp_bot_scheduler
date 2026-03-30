@@ -1,11 +1,12 @@
+from aiogram import Bot
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from scheduler_app.deps import get_current_user, get_session, get_settings, get_cipher
+from scheduler_app.deps import get_bot, get_current_user, get_session, get_settings, get_cipher
 from scheduler_app.models import User
 from scheduler_app.schemas import PollCreateRequest, PollRead, PollResolveRequest, VoteRequest
 from scheduler_app.security import TokenCipher
-from scheduler_app.services.common import NotFoundError, PermissionDeniedError
+from scheduler_app.services.common import NotFoundError, PermissionDeniedError, ServiceError
 from scheduler_app.services.polls import PollService
 from scheduler_app.services.presenters import poll_read
 from scheduler_app.settings import Settings
@@ -38,14 +39,17 @@ async def create_poll(
     session: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
     cipher: TokenCipher = Depends(get_cipher),
+    bot: Bot = Depends(get_bot),
 ) -> PollRead:
-    service = PollService(session, settings, cipher)
+    service = PollService(session, settings, cipher, bot=bot)
     try:
         poll = await service.create_poll(current_user, workspace_id, payload)
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except PermissionDeniedError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ServiceError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
     await session.commit()
     return poll_read(poll)
 
@@ -95,8 +99,9 @@ async def resolve_poll(
     session: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
     cipher: TokenCipher = Depends(get_cipher),
+    bot: Bot = Depends(get_bot),
 ) -> PollRead:
-    service = PollService(session, settings, cipher)
+    service = PollService(session, settings, cipher, bot=bot)
     try:
         poll = await service.resolve(current_user, poll_id, payload)
         _, user_vote = await service.get_poll(current_user, poll_id)
@@ -104,5 +109,7 @@ async def resolve_poll(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except PermissionDeniedError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ServiceError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
     await session.commit()
     return poll_read(poll, user_vote_option_id=user_vote)

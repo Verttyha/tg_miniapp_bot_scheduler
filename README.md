@@ -35,7 +35,6 @@ Then open `.env` and fill at least:
 - `APP_SECRET`
 - `BOT_TOKEN`
 - `BOT_USERNAME`
-- `BASE_URL`
 
 For local startup you can keep:
 
@@ -62,7 +61,36 @@ After startup:
 - Mini App: [http://localhost:8000/app](http://localhost:8000/app)
 - Healthcheck: [http://localhost:8000/health](http://localhost:8000/health)
 
-### 3. Rebuild the Mini App only if needed
+### 3. Publish localhost over HTTPS for Telegram
+
+`ngrok` is no longer required. The default tunnel helper now uses `localhost.run`, because it has been more reliable in this environment than Cloudflare quick tunnels:
+
+```powershell
+.\telegram-scheduler-tunnel.cmd
+```
+
+`localhost.run` uses the system `ssh` client, so no extra tunnel binary is required on a standard Windows install with OpenSSH Client enabled.
+
+There is also an installed console script on fresh environments: `.\.venv\Scripts\telegram-scheduler-tunnel`.
+
+What this command does:
+
+- starts an SSH reverse tunnel to `localhost.run`
+- detects the generated public `https://...` URL
+- writes that URL into `.env` as `BASE_URL`
+- keeps the tunnel alive until you stop it
+
+Keep that terminal open. If the backend is already running, restart it once so the app picks up the new `BASE_URL`.
+
+When the backend starts with a public `https` `BASE_URL`, it now registers Telegram webhook automatically at `/webhooks/telegram`.
+
+If you need the previous fallback explicitly, you can still use Cloudflare:
+
+```powershell
+.\telegram-scheduler-cloudflare.cmd --protocol http2
+```
+
+### 4. Rebuild the Mini App only if needed
 
 You only need to rebuild the frontend if you changed files inside `apps/miniapp`. A built frontend bundle is already present in `apps/server/scheduler_app/static/app`.
 
@@ -73,7 +101,7 @@ cmd /c npm run build
 Set-Location ..\..
 ```
 
-### 4. Ready-to-run commands for this workspace
+### 5. Ready-to-run commands for this workspace
 
 Use these exact commands for `C:\Users\andre\Desktop\tgbotminiapp\tg_miniapp_bot_teacher`.
 
@@ -91,10 +119,11 @@ cd C:\Users\andre\Desktop\tgbotminiapp\tg_miniapp_bot_teacher
 .\.venv\Scripts\python -m uvicorn scheduler_app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-Start ngrok for port `8000`:
+Start the public HTTPS tunnel:
 
 ```powershell
-ngrok http 8000
+cd C:\Users\andre\Desktop\tgbotminiapp\tg_miniapp_bot_teacher
+.\telegram-scheduler-tunnel.cmd
 ```
 
 ## Quick Bot Launch Commands
@@ -123,8 +152,9 @@ That means:
 - the service starts locally without issues
 - Telegram cannot deliver updates to `localhost`
 - a real bot setup needs a public `https` URL in `BASE_URL`
+- when `BASE_URL` points to a public `https` address, the app syncs the webhook automatically on startup
 
-Example webhook setup command:
+If you disable `SYNC_TELEGRAM_WEBHOOK_ON_STARTUP`, you can still register the webhook manually:
 
 ```powershell
 Invoke-RestMethod -Uri "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook?url=https://<YOUR_PUBLIC_HTTPS_DOMAIN>/webhooks/telegram"
@@ -132,12 +162,23 @@ Invoke-RestMethod -Uri "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook?
 
 `BASE_URL` in `.env` must match the same public address.
 
+## Why Not Vercel?
+
+Vercel is a good fit for hosting the static Mini App frontend, but it is a poor drop-in replacement for the local development tunnel in this repository because the project currently depends on:
+
+- a local FastAPI process receiving Telegram webhooks
+- SQLite on the local filesystem
+- an in-process scheduler for reminders and poll finalization
+
+For this stack, exposing the existing local service through a lightweight public tunnel is the smallest and safest change. The default helper now uses `localhost.run`, with Cloudflare still available as a fallback provider.
+
 ## Main Flows
 
 - `POST /api/auth/telegram/init-data` validates Telegram `initData` and returns a signed session token
-- `POST /webhooks/telegram` handles `/start` in private chat and `/setup` in groups
+- `POST /webhooks/telegram` handles `/start` in private chat, offers opening the Mini App, and provides an "add to chat" deep link
+- `POST /webhooks/telegram` handles `/start` and `/setup` in groups, creating the workspace automatically after the bot is added
 - `POST /api/workspaces/{id}/events` creates events and fans them out to active participant calendars
-- `POST /api/workspaces/{id}/polls` creates vote-based scheduling polls
+- `POST /api/workspaces/{id}/polls` creates vote-based scheduling polls and publishes them as native Telegram polls in the linked chat
 - In-process scheduler finalizes due polls and sends due reminders
 
 ## Tests
@@ -153,5 +194,5 @@ cmd /c npm run build
 cd C:\Users\andre\Desktop\tgbotminiapp\tg_miniapp_bot_teacher
 .\.venv\Scripts\python -m uvicorn scheduler_app.main:app --host 127.0.0.1 --port 8000 --reload
 
-ngrok http 8000
+.\telegram-scheduler-tunnel.cmd
 ```

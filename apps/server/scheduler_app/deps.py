@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 
+from aiogram import Bot
 from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +18,10 @@ def get_settings(request: Request) -> Settings:
 
 def get_cipher(request: Request) -> TokenCipher:
     return request.app.state.cipher
+
+
+def get_bot(request: Request) -> Bot:
+    return request.app.state.bot
 
 
 async def get_session(request: Request) -> AsyncIterator[AsyncSession]:

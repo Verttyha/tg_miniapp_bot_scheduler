@@ -3,7 +3,8 @@ import {
   bindViewportCssVars,
   init,
   mountThemeParamsSync,
-  mountViewport
+  mountViewport,
+  retrieveRawInitData
 } from "@telegram-apps/sdk";
 
 declare global {
@@ -19,10 +20,6 @@ declare global {
 }
 
 export async function initTelegramApp(): Promise<string> {
-  if (!window.Telegram?.WebApp) {
-    return "";
-  }
-
   try {
     init();
     if (mountThemeParamsSync.isAvailable()) {
@@ -41,7 +38,12 @@ export async function initTelegramApp(): Promise<string> {
     console.warn("Telegram SDK unavailable outside Telegram environment", error);
   }
 
-  window.Telegram.WebApp.ready();
-  window.Telegram.WebApp.expand();
-  return window.Telegram.WebApp.initData ?? "";
+  window.Telegram?.WebApp?.ready();
+  window.Telegram?.WebApp?.expand();
+
+  try {
+    return retrieveRawInitData();
+  } catch {
+    return window.Telegram?.WebApp?.initData ?? "";
+  }
 }

@@ -561,6 +561,10 @@ code {
   cursor: pointer;
 }
 
+.vote-card--readonly {
+  cursor: default;
+}
+
 .vote-card--selected {
   box-shadow: 0 0 0 1px rgba(245, 228, 255, 0.3), var(--shadow);
   background: rgba(73, 39, 120, 0.9);

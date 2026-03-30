@@ -1,2 +1,4 @@
 [console_scripts]
 telegram-scheduler = scheduler_app.main:run
+telegram-scheduler-cloudflare = scheduler_app.dev.cloudflare:main
+telegram-scheduler-tunnel = scheduler_app.dev.tunnel:main

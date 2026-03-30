@@ -62,6 +62,9 @@ def telegram_mock():
         mock_router.post(path__regex=r"/bot.*/sendMessage").mock(
             return_value=Response(200, json={"ok": True, "result": {"message_id": 1}})
         )
+        mock_router.post(path__regex=r"/bot.*/answerCallbackQuery").mock(
+            return_value=Response(200, json={"ok": True, "result": True})
+        )
         yield mock_router
 
 

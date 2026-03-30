@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
-from scheduler_app.models import User, Workspace, WorkspaceMember
+from scheduler_app.models import User, Workspace, WorkspaceMember, WorkspaceRole
 
 from tests.conftest import authenticate
 
@@ -41,13 +41,237 @@ async def test_group_setup_webhook_creates_workspace(client, app, settings, tele
     async with app.state.session_factory() as session:
         workspace = await session.scalar(select(Workspace).where(Workspace.name == "Physics club"))
         membership = await session.scalar(
-            select(WorkspaceMember).where(WorkspaceMember.workspace_id == workspace.id)
+            select(WorkspaceMember).where(
+                WorkspaceMember.workspace_id == workspace.id,
+                WorkspaceMember.role == WorkspaceRole.OWNER.value,
+            )
         )
         user = await session.scalar(select(User).where(User.telegram_user_id == 111002))
 
     assert workspace is not None
     assert membership is not None
     assert user is not None
+    assert membership.user_id == user.id
+
+
+async def test_group_start_webhook_creates_workspace(client, app, settings, telegram_mock):
+    await authenticate(client, settings, 111003, "calendaradmin")
+
+    payload = {
+        "update_id": 11,
+        "message": {
+            "message_id": 11,
+            "date": 1_700_000_050,
+            "chat": {"id": -100203, "type": "group", "title": "History club"},
+            "from": {
+                "id": 111003,
+                "is_bot": False,
+                "first_name": "Calendar",
+                "username": "calendaradmin",
+            },
+            "text": "/start setup",
+            "entities": [{"offset": 0, "length": 6, "type": "bot_command"}],
+        },
+    }
+
+    response = await client.post("/webhooks/telegram", json=payload)
+    response.raise_for_status()
+
+    async with app.state.session_factory() as session:
+        workspace = await session.scalar(select(Workspace).where(Workspace.name == "History club"))
+        membership = await session.scalar(
+            select(WorkspaceMember).where(WorkspaceMember.workspace_id == workspace.id)
+        )
+
+    assert workspace is not None
+    assert membership is not None
+
+
+async def test_existing_group_setup_keeps_first_connector_as_owner(client, app, settings, telegram_mock):
+    await authenticate(client, settings, 111004, "firstowner")
+    await authenticate(client, settings, 111005, "seconduser")
+
+    initial_payload = {
+        "update_id": 21,
+        "message": {
+            "message_id": 21,
+            "date": 1_700_000_060,
+            "chat": {"id": -100204, "type": "group", "title": "Book club"},
+            "from": {
+                "id": 111004,
+                "is_bot": False,
+                "first_name": "First",
+                "username": "firstowner",
+            },
+            "text": "/setup",
+            "entities": [{"offset": 0, "length": 6, "type": "bot_command"}],
+        },
+    }
+    second_payload = {
+        "update_id": 22,
+        "message": {
+            "message_id": 22,
+            "date": 1_700_000_061,
+            "chat": {"id": -100204, "type": "group", "title": "Book club"},
+            "from": {
+                "id": 111005,
+                "is_bot": False,
+                "first_name": "Second",
+                "username": "seconduser",
+            },
+            "text": "/setup",
+            "entities": [{"offset": 0, "length": 6, "type": "bot_command"}],
+        },
+    }
+
+    initial_response = await client.post("/webhooks/telegram", json=initial_payload)
+    initial_response.raise_for_status()
+    second_response = await client.post("/webhooks/telegram", json=second_payload)
+    second_response.raise_for_status()
+
+    async with app.state.session_factory() as session:
+        workspace = await session.scalar(select(Workspace).where(Workspace.name == "Book club"))
+        first_user = await session.scalar(select(User).where(User.telegram_user_id == 111004))
+        second_user = await session.scalar(select(User).where(User.telegram_user_id == 111005))
+        first_membership = await session.scalar(
+            select(WorkspaceMember).where(
+                WorkspaceMember.workspace_id == workspace.id,
+                WorkspaceMember.user_id == first_user.id,
+            )
+        )
+        second_membership = await session.scalar(
+            select(WorkspaceMember).where(
+                WorkspaceMember.workspace_id == workspace.id,
+                WorkspaceMember.user_id == second_user.id,
+            )
+        )
+
+    assert workspace is not None
+    assert first_user is not None
+    assert second_user is not None
+    assert workspace.owner_user_id == first_user.id
+    assert first_membership is not None
+    assert second_membership is not None
+    assert first_membership.role == WorkspaceRole.OWNER.value
+    assert second_membership.role == WorkspaceRole.MEMBER.value
+
+
+async def test_owner_can_promote_member_to_admin_from_private_bot(client, app, settings, telegram_mock):
+    await authenticate(client, settings, 111030, "owner3")
+
+    setup_payload = {
+        "update_id": 31,
+        "message": {
+            "message_id": 31,
+            "date": 1_700_000_300,
+            "chat": {"id": -100230, "type": "group", "title": "Cinema club"},
+            "from": {
+                "id": 111030,
+                "is_bot": False,
+                "first_name": "Owner",
+                "username": "owner3",
+            },
+            "text": "/setup",
+            "entities": [{"offset": 0, "length": 6, "type": "bot_command"}],
+        },
+    }
+    setup_response = await client.post("/webhooks/telegram", json=setup_payload)
+    setup_response.raise_for_status()
+
+    await authenticate(client, settings, 111031, "member3")
+
+    async with app.state.session_factory() as session:
+        workspace = await session.scalar(select(Workspace).where(Workspace.name == "Cinema club"))
+        member = await session.scalar(select(User).where(User.telegram_user_id == 111031))
+        owner = await session.scalar(select(User).where(User.telegram_user_id == 111030))
+        membership = await session.scalar(
+            select(WorkspaceMember).where(
+                WorkspaceMember.workspace_id == workspace.id,
+                WorkspaceMember.user_id == member.id,
+            )
+        )
+
+    assert workspace is not None
+    assert member is not None
+    assert owner is not None
+    assert membership is not None
+    assert membership.role == WorkspaceRole.MEMBER.value
+
+    admins_command_payload = {
+        "update_id": 32,
+        "message": {
+            "message_id": 32,
+            "date": 1_700_000_301,
+            "chat": {"id": 111030, "type": "private", "first_name": "Owner", "username": "owner3"},
+            "from": {
+                "id": 111030,
+                "is_bot": False,
+                "first_name": "Owner",
+                "username": "owner3",
+            },
+            "text": "/admins",
+            "entities": [{"offset": 0, "length": 7, "type": "bot_command"}],
+        },
+    }
+    admins_command_response = await client.post("/webhooks/telegram", json=admins_command_payload)
+    admins_command_response.raise_for_status()
+
+    workspace_callback_payload = {
+        "update_id": 33,
+        "callback_query": {
+            "id": "cbq-workspace",
+            "from": {
+                "id": 111030,
+                "is_bot": False,
+                "first_name": "Owner",
+                "username": "owner3",
+            },
+            "message": {
+                "message_id": 320,
+                "date": 1_700_000_302,
+                "chat": {"id": 111030, "type": "private", "first_name": "Owner", "username": "owner3"},
+                "text": "Админы чатов",
+            },
+            "chat_instance": "chat-instance-1",
+            "data": f"admins:ws:{workspace.id}",
+        },
+    }
+    workspace_callback_response = await client.post("/webhooks/telegram", json=workspace_callback_payload)
+    workspace_callback_response.raise_for_status()
+
+    promote_callback_payload = {
+        "update_id": 34,
+        "callback_query": {
+            "id": "cbq-promote",
+            "from": {
+                "id": 111030,
+                "is_bot": False,
+                "first_name": "Owner",
+                "username": "owner3",
+            },
+            "message": {
+                "message_id": 321,
+                "date": 1_700_000_303,
+                "chat": {"id": 111030, "type": "private", "first_name": "Owner", "username": "owner3"},
+                "text": "Управление администраторами",
+            },
+            "chat_instance": "chat-instance-2",
+            "data": f"admins:set:{workspace.id}:{member.id}:admin",
+        },
+    }
+    promote_callback_response = await client.post("/webhooks/telegram", json=promote_callback_payload)
+    promote_callback_response.raise_for_status()
+
+    async with app.state.session_factory() as session:
+        promoted_membership = await session.scalar(
+            select(WorkspaceMember).where(
+                WorkspaceMember.workspace_id == workspace.id,
+                WorkspaceMember.user_id == member.id,
+            )
+        )
+
+    assert promoted_membership is not None
+    assert promoted_membership.role == WorkspaceRole.ADMIN.value
 
 
 async def test_bootstrap_auth_auto_joins_single_workspace(client, app, settings, telegram_mock):

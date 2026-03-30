@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import urlparse
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -24,6 +25,10 @@ class Settings(BaseSettings):
     database_url: str | None = Field(default=None, alias="DATABASE_URL")
     sqlite_path: str = Field(default="data/app.db", alias="SQLITE_PATH")
     allow_insecure_dev_auth: bool = Field(default=True, alias="ALLOW_INSECURE_DEV_AUTH")
+    sync_telegram_webhook_on_startup: bool = Field(
+        default=True,
+        alias="SYNC_TELEGRAM_WEBHOOK_ON_STARTUP",
+    )
     scheduler_interval_seconds: int = 30
     reminder_minutes_before: int = 60
     telegram_init_data_ttl_seconds: int = 3600
@@ -51,6 +56,22 @@ class Settings(BaseSettings):
     @property
     def frontend_dist_dir(self) -> Path:
         return Path(__file__).resolve().parent / "static" / "app"
+
+    @property
+    def telegram_webhook_url(self) -> str:
+        return f"{self.base_url.rstrip('/')}/webhooks/telegram"
+
+    @property
+    def should_sync_telegram_webhook(self) -> bool:
+        if not self.sync_telegram_webhook_on_startup:
+            return False
+        parsed = urlparse(self.base_url)
+        hostname = (parsed.hostname or "").lower()
+        return (
+            parsed.scheme == "https"
+            and hostname not in {"", "localhost", "127.0.0.1", "0.0.0.0"}
+            and not hostname.endswith(".local")
+        )
 
     @property
     def google_redirect_uri(self) -> str:

@@ -215,6 +215,11 @@ class Poll(Base):
     created_by: Mapped[User] = relationship()
     options: Mapped[list["PollOption"]] = relationship(back_populates="poll", cascade="all, delete-orphan", foreign_keys="PollOption.poll_id")
     votes: Mapped[list["Vote"]] = relationship(back_populates="poll", cascade="all, delete-orphan")
+    telegram_chat_poll: Mapped["TelegramChatPoll | None"] = relationship(
+        back_populates="poll",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
 
 
 class PollOption(Base):
@@ -244,6 +249,25 @@ class Vote(Base):
     poll: Mapped[Poll] = relationship(back_populates="votes")
     option: Mapped[PollOption] = relationship()
     user: Mapped[User] = relationship()
+
+
+class TelegramChatPoll(Base):
+    __tablename__ = "telegram_chat_polls"
+    __table_args__ = (
+        UniqueConstraint("poll_id", name="uq_telegram_chat_poll_per_poll"),
+        UniqueConstraint("telegram_poll_id", name="uq_telegram_chat_poll_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    poll_id: Mapped[int] = mapped_column(ForeignKey("polls.id"))
+    telegram_poll_id: Mapped[str] = mapped_column(String(255), index=True)
+    telegram_chat_id: Mapped[int] = mapped_column(Integer, index=True)
+    telegram_message_id: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    poll: Mapped[Poll] = relationship(back_populates="telegram_chat_poll")
 
 
 class AttendanceRecord(Base):

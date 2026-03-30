@@ -18,7 +18,7 @@ import {
   voteOnPoll
 } from "./api";
 import { initTelegramApp } from "./telegram";
-import type { CalendarConnection, EventItem, Poll, SessionPayload, StatsEntry, StatsSummary, User } from "./types";
+import type { CalendarConnection, EventItem, Poll, SessionPayload, StatsEntry, StatsSummary, User, Workspace } from "./types";
 
 const WORKSPACE_STORAGE_KEY = "scheduler.workspaceId";
 
@@ -29,9 +29,51 @@ function useSessionState() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!token) {
+      return;
+    }
+
+    let active = true;
+    async function refreshSession() {
+      try {
+        const current = await getCurrentSession(token);
+        if (!active) {
+          return;
+        }
+        setSession({ access_token: token, user: current.user, workspaces: current.workspaces });
+        setError(null);
+      } catch (requestError) {
+        if (active) {
+          setError(requestError instanceof Error ? requestError.message : "Unable to refresh session");
+        }
+      }
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        void refreshSession();
+      }
+    }
+
+    function handleFocus() {
+      void refreshSession();
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      active = false;
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [token]);
+
+  useEffect(() => {
     let active = true;
     (async () => {
       try {
+        const hasTelegramWebApp = Boolean(window.Telegram?.WebApp);
         const initData = await initTelegramApp();
         if (initData) {
           const payload = await bootstrapSession(initData);
@@ -42,6 +84,16 @@ function useSessionState() {
           setToken(payload.access_token);
           setSession(payload);
           return;
+        }
+
+        if (hasTelegramWebApp) {
+          localStorage.removeItem("scheduler.token");
+          if (!active) {
+            return;
+          }
+          setToken("");
+          setSession(null);
+          throw new Error("Telegram session not found. Reopen the Mini App from the bot menu.");
         }
 
         if (!token) {
@@ -195,6 +247,7 @@ function HomePage({ token, session }: { token: string; session: SessionPayload }
     return <Navigate to="/" replace />;
   }
 
+  const canManageWorkspace = isWorkspaceAdmin(workspace, session.user.id);
   const sortedEvents = [...events].sort(
     (left, right) => new Date(left.start_at).getTime() - new Date(right.start_at).getTime()
   );
@@ -249,29 +302,46 @@ function HomePage({ token, session }: { token: string; session: SessionPayload }
         {loading ? (
           <div className="empty-card">Загружаю события и синхронизации…</div>
         ) : visibleEvents.length ? (
-          visibleEvents.map((event) => (
-            <Link className="event-card" key={event.id} to={`/events/${event.id}/edit`}>
-              <div className="event-card__time">{formatTime(event.start_at)}</div>
-              <div className="event-card__body">
-                <strong>{event.title}</strong>
-                <span>{formatParticipantsLabel(event.participants.length)}</span>
-                {event.description ? <p>{event.description}</p> : null}
-              </div>
-            </Link>
-          ))
+          visibleEvents.map((event) =>
+            canManageWorkspace ? (
+              <Link className="event-card" key={event.id} to={`/events/${event.id}/edit`}>
+                <div className="event-card__time">{formatTime(event.start_at)}</div>
+                <div className="event-card__body">
+                  <strong>{event.title}</strong>
+                  <span>{formatParticipantsLabel(event.participants.length)}</span>
+                  {event.description ? <p>{event.description}</p> : null}
+                </div>
+              </Link>
+            ) : (
+              <article className="event-card" key={event.id}>
+                <div className="event-card__time">{formatTime(event.start_at)}</div>
+                <div className="event-card__body">
+                  <strong>{event.title}</strong>
+                  <span>{formatParticipantsLabel(event.participants.length)}</span>
+                  {event.description ? <p>{event.description}</p> : null}
+                </div>
+              </article>
+            )
+          )
         ) : (
           <div className="empty-card">Пока нет событий. Создайте первое, и оно появится здесь.</div>
         )}
       </div>
 
-      <div className="primary-actions">
-        <Link className="action-strip" to={`/workspaces/${workspace.id}/events/new`}>
-          Создать событие
-        </Link>
-        <Link className="action-strip" to={`/workspaces/${workspace.id}/polls/new`}>
-          Голосование событий
-        </Link>
-      </div>
+      {canManageWorkspace ? (
+        <div className="primary-actions">
+          <Link className="action-strip" to={`/workspaces/${workspace.id}/events/new`}>
+            Создать событие
+          </Link>
+          <Link className="action-strip" to={`/workspaces/${workspace.id}/polls/new`}>
+            Голосование событий
+          </Link>
+        </div>
+      ) : (
+        <div className="status-banner status-banner--muted">
+          Создавать и менять события могут только администраторы чата. Вы можете следить за расписанием и участвовать в голосованиях.
+        </div>
+      )}
 
       <div className="home-screen__footer">
         {openPolls.length ? (
@@ -376,8 +446,33 @@ function EventEditor({ token, session }: { token: string; session: SessionPayloa
     };
   }, [eventId, token]);
 
+  if (!workspace && eventId && loading) {
+    return (
+      <section className="editor-screen">
+        <ScreenHeader title="Загрузка события" eyebrow="Форма" />
+        <div className="empty-card">Загружаю данные события…</div>
+      </section>
+    );
+  }
+
   if (!workspace) {
     return <Navigate to="/" replace />;
+  }
+
+  const canManageWorkspace = isWorkspaceAdmin(workspace, session.user.id);
+
+  if (!canManageWorkspace) {
+    return (
+      <section className="editor-screen">
+        <ScreenHeader
+          backTo={`/workspaces/${workspace.id}`}
+          eyebrow="Форма"
+          title={eventId ? "Изменить событие" : "Создать событие"}
+          description={workspace.name}
+        />
+        <div className="notice">Создавать и изменять события могут только администраторы чата.</div>
+      </section>
+    );
   }
 
   async function handleSubmit(submitEvent: FormEvent<HTMLFormElement>) {
@@ -507,6 +602,22 @@ function PollEditor({ token, session }: { token: string; session: SessionPayload
 
   if (!workspace) {
     return <Navigate to="/" replace />;
+  }
+
+  const canManageWorkspace = isWorkspaceAdmin(workspace, session.user.id);
+
+  if (!canManageWorkspace) {
+    return (
+      <section className="editor-screen">
+        <ScreenHeader
+          backTo={`/workspaces/${workspace.id}`}
+          eyebrow="Голосование"
+          title="Создать опрос"
+          description="Выберите несколько вариантов времени, а команда проголосует"
+        />
+        <div className="notice">Создавать опросы могут только администраторы чата.</div>
+      </section>
+    );
   }
 
   async function handleSubmit(submitEvent: FormEvent<HTMLFormElement>) {
@@ -727,6 +838,8 @@ function PollPage({ token, session }: { token: string; session: SessionPayload }
   const workspace = poll
     ? session.workspaces.find((item) => item.id === poll.workspace_id) ?? session.workspaces[0] ?? null
     : session.workspaces[0] ?? null;
+  const canManageWorkspace = workspace ? isWorkspaceAdmin(workspace, session.user.id) : false;
+  const voteInChatOnly = Boolean(poll?.has_chat_poll && poll.status === "open");
 
   return (
     <section className="detail-screen">
@@ -746,12 +859,27 @@ function PollPage({ token, session }: { token: string; session: SessionPayload }
           <div className="status-banner">
             Дедлайн: {formatDateTime(poll.deadline_at)} · проголосовали {countPollVotes(poll)}
           </div>
+          {voteInChatOnly ? (
+            <div className="status-banner status-banner--muted">
+              Голосование идёт в Telegram-чате. Бот сам считает ответы и закроет poll в момент дедлайна.
+            </div>
+          ) : null}
           <div className="vote-list">
             {poll.options.map((option) => {
               const selected = poll.user_vote_option_id === option.id;
+              const className = `vote-card ${selected ? "vote-card--selected" : ""} ${voteInChatOnly ? "vote-card--readonly" : ""}`;
+              if (voteInChatOnly) {
+                return (
+                  <article className={className} key={option.id}>
+                    <strong>{option.label ?? `Вариант ${option.id}`}</strong>
+                    <span>{formatDateTime(option.start_at)}</span>
+                    <span>{option.vote_count} голосов</span>
+                  </article>
+                );
+              }
               return (
                 <button
-                  className={`vote-card ${selected ? "vote-card--selected" : ""}`}
+                  className={className}
                   key={option.id}
                   type="button"
                   onClick={() => handleVote(option.id)}
@@ -764,9 +892,15 @@ function PollPage({ token, session }: { token: string; session: SessionPayload }
             })}
           </div>
           {poll.status === "needs_admin_resolution" ? (
-            <button className="action-pill action-pill--full" type="button" onClick={handleResolve}>
+            canManageWorkspace ? (
+              <button className="action-pill action-pill--full" type="button" onClick={handleResolve}>
               Завершить голосование выбранным вариантом
             </button>
+            ) : (
+              <div className="status-banner status-banner--muted">
+                Завершить голосование может только администратор чата.
+              </div>
+            )
           ) : null}
         </>
       )}
@@ -1094,4 +1228,13 @@ function translateConnectionStatus(status: string) {
 
 function capitalize(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function getWorkspaceMembership(workspace: Workspace, userId: number) {
+  return workspace.members.find((member) => member.user.id === userId) ?? null;
+}
+
+function isWorkspaceAdmin(workspace: Workspace, userId: number) {
+  const membership = getWorkspaceMembership(workspace, userId);
+  return membership?.role === "owner" || membership?.role === "admin";
 }

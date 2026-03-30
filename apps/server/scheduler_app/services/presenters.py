@@ -72,6 +72,7 @@ def poll_read(
         options=options,
         vote_totals=vote_totals,
         user_vote_option_id=user_vote_option_id,
+        has_chat_poll=poll.telegram_chat_poll is not None,
     )
 
 

@@ -1,0 +1,7 @@
+
+cd C:\TGminiapp
+.\telegram-scheduler-tunnel.cmd
+
+
+cd C:\TGminiapp
+.\.venv\Scripts\telegram-scheduler

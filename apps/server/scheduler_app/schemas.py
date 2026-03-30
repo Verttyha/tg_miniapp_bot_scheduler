@@ -181,6 +181,7 @@ class PollRead(BaseModel):
     options: list[PollOptionRead] = Field(default_factory=list)
     vote_totals: dict[int, int] = Field(default_factory=dict)
     user_vote_option_id: int | None = None
+    has_chat_poll: bool = False
 
 
 class StatsEntryRead(BaseModel):
