@@ -88,12 +88,12 @@ After startup:
 `ngrok` is no longer required. The default tunnel helper now uses `localhost.run`, because it has been more reliable in this environment than Cloudflare quick tunnels:
 
 ```powershell
-.\.venv\Scripts\telegram-scheduler-tunnel
+.\telegram-scheduler-tunnel.cmd
 ```
 
 `localhost.run` uses the system `ssh` client, so no extra tunnel binary is required on a standard Windows install with OpenSSH Client enabled.
 
-If your virtual environment was installed before this helper was added, the older compatibility command `.\.venv\Scripts\telegram-scheduler-cloudflare` still works and now follows the default provider selection.
+There is also an installed console script on fresh environments: `.\.venv\Scripts\telegram-scheduler-tunnel`.
 
 What this command does:
 
@@ -109,7 +109,7 @@ When the backend starts with a public `https` `BASE_URL`, it now registers Teleg
 If you need the previous fallback explicitly, you can still use Cloudflare:
 
 ```powershell
-.\.venv\Scripts\telegram-scheduler-tunnel --provider cloudflare --protocol http2
+.\telegram-scheduler-cloudflare.cmd --protocol http2
 ```
 
 ### 4. Rebuild the Mini App only if needed
@@ -145,7 +145,7 @@ Start the public HTTPS tunnel:
 
 ```powershell
 cd C:\Users\andre\Desktop\tgbotminiapp\tg_miniapp_bot_teacher
-.\.venv\Scripts\telegram-scheduler-tunnel
+.\telegram-scheduler-tunnel.cmd
 ```
 
 ## Quick Bot Launch Commands
@@ -197,9 +197,10 @@ For this stack, exposing the existing local service through a lightweight public
 ## Main Flows
 
 - `POST /api/auth/telegram/init-data` validates Telegram `initData` and returns a signed session token
-- `POST /webhooks/telegram` handles `/start` in private chat and `/setup` in groups
+- `POST /webhooks/telegram` handles `/start` in private chat, offers opening the Mini App, and provides an "add to chat" deep link
+- `POST /webhooks/telegram` handles `/start` and `/setup` in groups, creating the workspace automatically after the bot is added
 - `POST /api/workspaces/{id}/events` creates events and fans them out to active participant calendars
-- `POST /api/workspaces/{id}/polls` creates vote-based scheduling polls
+- `POST /api/workspaces/{id}/polls` creates vote-based scheduling polls and publishes them as native Telegram polls in the linked chat
 - In-process scheduler finalizes due polls and sends due reminders
 
 ## Tests
@@ -215,5 +216,5 @@ cmd /c npm run build
 cd C:\Users\andre\Desktop\tgbotminiapp\tg_miniapp_bot_teacher
 .\.venv\Scripts\python -m uvicorn scheduler_app.main:app --host 127.0.0.1 --port 8000 --reload
 
-.\.venv\Scripts\telegram-scheduler-tunnel
+.\telegram-scheduler-tunnel.cmd
 ```

@@ -53,5 +53,6 @@ apps/server/telegram_scheduler_miniapp.egg-info/top_level.txt
 tests/test_auth_and_webhook.py
 tests/test_events_and_stats.py
 tests/test_scheduler_and_polls.py
+tests/test_settings.py
 tests/test_startup_webhook_sync.py
 tests/test_tunnel_helper.py

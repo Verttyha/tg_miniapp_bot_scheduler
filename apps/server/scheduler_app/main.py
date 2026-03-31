@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 import logging
+import re
 
 import uvicorn
 from aiogram import Bot, Dispatcher
@@ -59,7 +60,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         async with engine.begin() as connection:
             await connection.run_sync(Base.metadata.create_all)
         await sync_telegram_webhook(bot, dispatcher, runtime_settings)
-        scheduler.start()
         try:
             yield
         finally:
@@ -75,6 +75,30 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.bot = bot
     app.state.dispatcher = dispatcher
     app.state.scheduler = scheduler
+
+    def should_skip_post_trigger(path: str, method: str) -> bool:
+        if method != "POST":
+            return False
+        return bool(re.fullmatch(rf"{runtime_settings.api_prefix}/workspaces/\d+/polls", path))
+
+    @app.middleware("http")
+    async def trigger_scheduler_on_activity(request: Request, call_next):
+        path = request.url.path
+        is_api_request = path.startswith(runtime_settings.api_prefix)
+        is_telegram_webhook = path.startswith("/webhooks/telegram")
+        is_read_request = request.method in {"GET", "HEAD", "OPTIONS"}
+
+        if is_api_request and is_read_request:
+            await scheduler.trigger()
+
+        response = await call_next(request)
+
+        if is_telegram_webhook or (
+            is_api_request and not is_read_request and not should_skip_post_trigger(path, request.method)
+        ):
+            await scheduler.trigger()
+
+        return response
 
     app.include_router(api_router, prefix=runtime_settings.api_prefix)
     app.include_router(oauth_router)

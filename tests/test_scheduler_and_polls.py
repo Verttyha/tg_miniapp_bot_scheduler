@@ -131,8 +131,6 @@ async def test_scheduler_resolves_due_chat_poll_from_telegram_answers(client, ap
     assert vote_response.status_code == 403
     assert vote_response.json()["detail"] == "Vote in the Telegram chat poll"
 
-    await app.state.scheduler.tick()
-
     poll_response = await client.get(
         f"/api/polls/{poll_id}",
         headers={"Authorization": f"Bearer {owner['access_token']}"},

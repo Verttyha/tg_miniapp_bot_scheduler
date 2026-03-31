@@ -76,13 +76,22 @@ function useSessionState() {
         const hasTelegramWebApp = Boolean(window.Telegram?.WebApp);
         const initData = await initTelegramApp();
         if (initData) {
-          const payload = await bootstrapSession(initData);
+          if (!token) {
+            const payload = await bootstrapSession(initData);
+            if (!active) {
+              return;
+            }
+            localStorage.setItem("scheduler.token", payload.access_token);
+            setToken(payload.access_token);
+            setSession(payload);
+            return;
+          }
+
+          const current = await getCurrentSession(token);
           if (!active) {
             return;
           }
-          localStorage.setItem("scheduler.token", payload.access_token);
-          setToken(payload.access_token);
-          setSession(payload);
+          setSession({ access_token: token, user: current.user, workspaces: current.workspaces });
           return;
         }
 
@@ -192,21 +201,22 @@ function HomePage({ token, session }: { token: string; session: SessionPayload }
     session.workspaces.find((item) => item.id === selectedWorkspaceId) ??
     session.workspaces[0] ??
     null;
+  const workspaceDataId = workspace?.id ?? null;
 
   useEffect(() => {
-    if (!workspace) {
+    if (!workspaceDataId) {
       return;
     }
 
-    localStorage.setItem(WORKSPACE_STORAGE_KEY, String(workspace.id));
+    localStorage.setItem(WORKSPACE_STORAGE_KEY, String(workspaceDataId));
     let active = true;
     setLoading(true);
 
     (async () => {
       try {
         const [eventData, pollData, connectionData] = await Promise.all([
-          getWorkspaceEvents(workspace.id, token),
-          getWorkspacePolls(workspace.id, token),
+          getWorkspaceEvents(workspaceDataId, token),
+          getWorkspacePolls(workspaceDataId, token),
           getIntegrations(token)
         ]);
         if (!active) {
@@ -230,7 +240,7 @@ function HomePage({ token, session }: { token: string; session: SessionPayload }
     return () => {
       active = false;
     };
-  }, [token, workspace]);
+  }, [token, workspaceDataId]);
 
   if (!session.workspaces.length) {
     return (

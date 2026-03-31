@@ -51,12 +51,15 @@ class SchedulerRunner:
             await notification_service.dispatch_due_jobs()
             await session.commit()
 
+    async def trigger(self) -> None:
+        try:
+            await self.tick()
+        except Exception:  # pragma: no cover - defensive trigger logging
+            logger.exception("Scheduler tick failed")
+
     async def _run_loop(self) -> None:
         while not self._stop_event.is_set():
-            try:
-                await self.tick()
-            except Exception:  # pragma: no cover - defensive background logging
-                logger.exception("Scheduler tick failed")
+            await self.trigger()
             try:
                 await asyncio.wait_for(
                     self._stop_event.wait(),

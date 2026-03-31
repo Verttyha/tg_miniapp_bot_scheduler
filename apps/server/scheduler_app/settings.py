@@ -29,7 +29,7 @@ class Settings(BaseSettings):
         default=True,
         alias="SYNC_TELEGRAM_WEBHOOK_ON_STARTUP",
     )
-    scheduler_interval_seconds: int = 30
+    scheduler_interval_seconds: int = Field(default=300, alias="SCHEDULER_INTERVAL_SECONDS")
     reminder_minutes_before: int = 60
     telegram_init_data_ttl_seconds: int = 3600
     google_client_id: str = Field(default="", alias="GOOGLE_CLIENT_ID")

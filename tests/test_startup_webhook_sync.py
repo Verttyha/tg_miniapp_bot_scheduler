@@ -27,6 +27,7 @@ async def test_startup_syncs_webhook_for_public_https_base_url(tmp_path):
     app.state.bot.set_webhook = AsyncMock()
 
     async with app.router.lifespan_context(app):
+        assert app.state.scheduler._task is None
         pass
 
     app.state.bot.set_webhook.assert_awaited_once()
@@ -42,6 +43,7 @@ async def test_startup_skips_webhook_sync_for_local_base_url(tmp_path):
     app.state.bot.set_webhook = AsyncMock()
 
     async with app.router.lifespan_context(app):
+        assert app.state.scheduler._task is None
         pass
 
     app.state.bot.set_webhook.assert_not_awaited()
