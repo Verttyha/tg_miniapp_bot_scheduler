@@ -57,22 +57,13 @@ export function useSessionState() {
         const hasTelegramWebApp = Boolean(window.Telegram?.WebApp);
         const initData = await initTelegramApp();
         if (initData) {
-          if (!token) {
-            const payload = await bootstrapSession(initData);
-            if (!active) {
-              return;
-            }
-            localStorage.setItem("scheduler.token", payload.access_token);
-            setToken(payload.access_token);
-            setSession(payload);
-            return;
-          }
-
-          const current = await getCurrentSession(token);
+          const payload = await bootstrapSession(initData);
           if (!active) {
             return;
           }
-          setSession({ access_token: token, user: current.user, workspaces: current.workspaces });
+          localStorage.setItem("scheduler.token", payload.access_token);
+          setToken(payload.access_token);
+          setSession(payload);
           return;
         }
 

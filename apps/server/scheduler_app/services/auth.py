@@ -8,9 +8,7 @@ from scheduler_app.core.security import SecurityError, build_session_token, vali
 from scheduler_app.core.settings import Settings
 from scheduler_app.domain.models import User, Workspace, WorkspaceMember
 from scheduler_app.domain.schemas import AuthResponse
-from scheduler_app.services.common import ServiceError
 from scheduler_app.services.presenters import user_read, workspace_read
-from scheduler_app.services.workspaces import WorkspaceService
 
 
 class AuthService:
@@ -42,11 +40,6 @@ class AuthService:
         await self.session.commit()
         await self.session.refresh(user)
         workspaces = await self._load_workspaces_for_user(user.id)
-        if not workspaces:
-            joined_workspace = await WorkspaceService(self.session).auto_join_single_workspace(user)
-            if joined_workspace:
-                await self.session.commit()
-                workspaces = await self._load_workspaces_for_user(user.id)
         token = build_session_token(user.id, self.settings.app_secret)
         return AuthResponse(access_token=token, user=user_read(user), workspaces=[workspace_read(item) for item in workspaces])
 

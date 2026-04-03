@@ -16,6 +16,8 @@ from scheduler_app.services.common import ConflictError, NotFoundError, Permissi
 from scheduler_app.services.polls import PollService
 from scheduler_app.services.workspaces import WorkspaceService
 
+TELEGRAM_ANONYMOUS_ADMIN_ID = 1087968824
+
 
 def build_router(session_factory: async_sessionmaker, settings: Settings) -> Router:
     router = Router()
@@ -201,7 +203,18 @@ def build_router(session_factory: async_sessionmaker, settings: Settings) -> Rou
         )
 
     async def ensure_group_workspace(message: Message) -> None:
-        if not message.from_user:
+        if (
+            not message.from_user
+            or message.from_user.is_bot
+            or message.from_user.id == TELEGRAM_ANONYMOUS_ADMIN_ID
+        ):
+            try:
+                await message.answer(
+                    "Не удалось назначить владельца календаря автоматически. "
+                    "Запустите /setup с обычного аккаунта администратора (не в анонимном режиме)."
+                )
+            except TelegramAPIError:
+                return
             return
         async with session_factory() as session:
             actor = await ensure_telegram_user(session, message.from_user)
@@ -354,7 +367,11 @@ def build_router(session_factory: async_sessionmaker, settings: Settings) -> Rou
     async def bot_added_to_chat_handler(update: ChatMemberUpdated) -> None:
         if update.chat.type not in {"group", "supergroup"}:
             return
-        if not update.from_user:
+        if (
+            not update.from_user
+            or update.from_user.is_bot
+            or update.from_user.id == TELEGRAM_ANONYMOUS_ADMIN_ID
+        ):
             return
 
         async with session_factory() as session:

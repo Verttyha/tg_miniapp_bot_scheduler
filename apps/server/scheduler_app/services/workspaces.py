@@ -7,6 +7,8 @@ from sqlalchemy.orm import selectinload
 from scheduler_app.domain.models import TelegramChat, User, Workspace, WorkspaceMember, WorkspaceRole
 from scheduler_app.services.common import ConflictError, NotFoundError, PermissionDeniedError
 
+TELEGRAM_ANONYMOUS_ADMIN_ID = 1087968824
+
 
 class WorkspaceService:
     def __init__(self, session: AsyncSession):
@@ -224,7 +226,10 @@ class WorkspaceService:
         workspace = await self.session.scalar(
             select(Workspace)
             .where(Workspace.telegram_chat_id == chat.id)
-            .options(selectinload(Workspace.members).selectinload(WorkspaceMember.user))
+            .options(
+                selectinload(Workspace.members).selectinload(WorkspaceMember.user),
+                selectinload(Workspace.owner),
+            )
         )
         created_workspace = False
         if not workspace:
@@ -232,6 +237,9 @@ class WorkspaceService:
             self.session.add(workspace)
             await self.session.flush()
             created_workspace = True
+        elif workspace.owner and workspace.owner.telegram_user_id == TELEGRAM_ANONYMOUS_ADMIN_ID:
+            workspace.owner_user_id = actor.id
+            await self.session.flush()
 
         membership = await self.session.scalar(
             select(WorkspaceMember).where(
