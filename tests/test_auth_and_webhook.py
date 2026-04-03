@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
-from scheduler_app.domain.models import User, Workspace, WorkspaceMember, WorkspaceRole
+from scheduler_app.domain.models import TelegramChat, User, Workspace, WorkspaceMember, WorkspaceRole
 
 from tests.conftest import authenticate
 
@@ -342,3 +342,76 @@ async def test_current_session_auto_joins_single_workspace(client, app, settings
 
     assert len(current_payload["workspaces"]) == 1
     assert current_payload["workspaces"][0]["name"] == "Chem club"
+
+
+async def test_bot_removed_from_group_detaches_workspace(client, app, settings, telegram_mock):
+    owner_payload = await authenticate(client, settings, 111040, "chatowner")
+
+    setup_payload = {
+        "update_id": 41,
+        "message": {
+            "message_id": 41,
+            "date": 1_700_000_400,
+            "chat": {"id": -100240, "type": "group", "title": "Music club"},
+            "from": {
+                "id": 111040,
+                "is_bot": False,
+                "first_name": "Owner",
+                "username": "chatowner",
+            },
+            "text": "/setup",
+            "entities": [{"offset": 0, "length": 6, "type": "bot_command"}],
+        },
+    }
+    setup_response = await client.post("/webhooks/telegram", json=setup_payload)
+    setup_response.raise_for_status()
+
+    removed_payload = {
+        "update_id": 42,
+        "my_chat_member": {
+            "chat": {"id": -100240, "type": "group", "title": "Music club"},
+            "from": {
+                "id": 111040,
+                "is_bot": False,
+                "first_name": "Owner",
+                "username": "chatowner",
+            },
+            "date": 1_700_000_401,
+            "old_chat_member": {
+                "user": {
+                    "id": 123456,
+                    "is_bot": True,
+                    "first_name": "SchedulerBot",
+                    "username": "test_scheduler_bot",
+                },
+                "status": "member",
+            },
+            "new_chat_member": {
+                "user": {
+                    "id": 123456,
+                    "is_bot": True,
+                    "first_name": "SchedulerBot",
+                    "username": "test_scheduler_bot",
+                },
+                "status": "left",
+            },
+        },
+    }
+    removed_response = await client.post("/webhooks/telegram", json=removed_payload)
+    removed_response.raise_for_status()
+
+    async with app.state.session_factory() as session:
+        chat = await session.scalar(select(TelegramChat).where(TelegramChat.telegram_chat_id == -100240))
+        workspace = await session.scalar(select(Workspace).where(Workspace.name == "Music club"))
+
+    current_response = await client.get(
+        "/api/me",
+        headers={"Authorization": f"Bearer {owner_payload['access_token']}"},
+    )
+    current_response.raise_for_status()
+    current_payload = current_response.json()
+
+    assert chat is None
+    assert workspace is not None
+    assert workspace.telegram_chat_id is None
+    assert current_payload["workspaces"] == []
