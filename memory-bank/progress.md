@@ -10,3 +10,5 @@
 - restored `memory-bank` as a tracked project directory
 - split the Mini App frontend into `pages`, `components`, `hooks`, `lib`, and layered `styles`
 - verified the frontend refactor with a successful `npm run build`, then removed temporary `node_modules` and generated assets again
+- added Telegram `my_chat_member` handling to detach removed group chats from active workspaces
+- added integration test for `/setup` -> bot removed (`my_chat_member`) -> workspace hidden from `/api/me`

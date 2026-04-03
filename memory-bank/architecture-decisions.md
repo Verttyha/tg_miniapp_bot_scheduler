@@ -53,3 +53,17 @@ Why:
 - the previous frontend was too dense to evolve safely
 - smaller files make future UI work faster and less error-prone
 - decomposed CSS is easier to maintain without breaking unrelated screens
+
+## 2026-04-03: Detach chat-linked workspace when bot is removed from Telegram group
+
+Decision:
+
+- handle Telegram `my_chat_member` updates for `LEFT` and `KICKED`
+- add service method that detaches `Workspace.telegram_chat_id` and removes `TelegramChat` record
+- filter workspace listings to show only active chat-bound workspaces
+
+Why:
+
+- users should not see stale chats after bot removal from Telegram
+- data consistency between Telegram state and bot/mini app state must be automatic
+- historical workspace data can stay in DB without being shown as active chat workspace

@@ -1,6 +1,7 @@
 # Stack
 
 - Backend: FastAPI, aiogram, SQLAlchemy async
+- Telegram event sync: aiogram `my_chat_member` updates for bot membership changes (`left`/`kicked`)
 - Frontend: React, TypeScript, Vite, Telegram Mini Apps SDK
 - Frontend structure: route pages + reusable components + hooks + lib helpers + layered CSS imports
 - Storage: SQLite by default, optional `DATABASE_URL` override
