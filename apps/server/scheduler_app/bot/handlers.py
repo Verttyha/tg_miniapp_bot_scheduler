@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from aiogram import F, Router
 from aiogram.exceptions import TelegramAPIError
-from aiogram.filters.chat_member_updated import ChatMemberUpdatedFilter, KICKED, LEFT
+from aiogram.filters.chat_member_updated import ADMINISTRATOR, ChatMemberUpdatedFilter, KICKED, LEFT, MEMBER
 from aiogram.filters import Command, CommandStart
 from aiogram.types import CallbackQuery, ChatMemberUpdated, InlineKeyboardButton, InlineKeyboardMarkup, Message, PollAnswer, WebAppInfo
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -347,6 +347,23 @@ def build_router(session_factory: async_sessionmaker, settings: Settings) -> Rou
         async with session_factory() as session:
             await WorkspaceService(session).detach_workspace_for_chat(
                 telegram_chat_id=update.chat.id
+            )
+            await session.commit()
+
+    @router.my_chat_member(ChatMemberUpdatedFilter(member_status_changed=MEMBER | ADMINISTRATOR))
+    async def bot_added_to_chat_handler(update: ChatMemberUpdated) -> None:
+        if update.chat.type not in {"group", "supergroup"}:
+            return
+        if not update.from_user:
+            return
+
+        async with session_factory() as session:
+            actor = await ensure_telegram_user(session, update.from_user)
+            await WorkspaceService(session).ensure_group_workspace(
+                actor=actor,
+                telegram_chat_id=update.chat.id,
+                title=update.chat.title or "Group workspace",
+                chat_type=update.chat.type,
             )
             await session.commit()
 

@@ -56,7 +56,12 @@ class WorkspaceService:
 
     async def auto_join_single_workspace(self, user: User) -> Workspace | None:
         existing_membership = await self.session.scalar(
-            select(WorkspaceMember).where(WorkspaceMember.user_id == user.id)
+            select(WorkspaceMember)
+            .join(Workspace, WorkspaceMember.workspace_id == Workspace.id)
+            .where(
+                WorkspaceMember.user_id == user.id,
+                Workspace.telegram_chat_id.is_not(None),
+            )
         )
         if existing_membership:
             return None
