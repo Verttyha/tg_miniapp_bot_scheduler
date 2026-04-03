@@ -6,10 +6,10 @@ import logging
 from aiogram import Bot
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from scheduler_app.security import TokenCipher
+from scheduler_app.core.security import TokenCipher
+from scheduler_app.core.settings import Settings
 from scheduler_app.services.notifications import NotificationService
 from scheduler_app.services.polls import PollService
-from scheduler_app.settings import Settings
 
 
 logger = logging.getLogger(__name__)

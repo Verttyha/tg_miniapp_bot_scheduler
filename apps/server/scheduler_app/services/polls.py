@@ -12,13 +12,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from scheduler_app.bot.service import ensure_telegram_user
-from scheduler_app.models import Poll, PollOption, PollStatus, TelegramChatPoll, User, Vote, Workspace, WorkspaceMember
-from scheduler_app.schemas import EventCreateRequest, PollCreateRequest, PollResolveRequest, VoteRequest
-from scheduler_app.security import TokenCipher
+from scheduler_app.core.security import TokenCipher
+from scheduler_app.core.settings import Settings
+from scheduler_app.domain.models import Poll, PollOption, PollStatus, TelegramChatPoll, User, Vote, Workspace, WorkspaceMember
+from scheduler_app.domain.schemas import EventCreateRequest, PollCreateRequest, PollResolveRequest, VoteRequest
 from scheduler_app.services.common import NotFoundError, PermissionDeniedError, ServiceError, ensure_admin, get_workspace_member
 from scheduler_app.services.events import EventService
 from scheduler_app.services.notifications import NotificationService
-from scheduler_app.settings import Settings
 
 
 logger = logging.getLogger(__name__)

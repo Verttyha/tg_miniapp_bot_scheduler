@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from scheduler_app.models import Workspace, WorkspaceMember, WorkspaceRole
+from scheduler_app.domain.models import Workspace, WorkspaceMember, WorkspaceRole
 
 
 class ServiceError(Exception):

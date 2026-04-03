@@ -3,7 +3,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock
 
 from scheduler_app.main import create_app
-from scheduler_app.settings import Settings
+from scheduler_app.core.settings import Settings
 
 
 def build_settings(tmp_path, **overrides) -> Settings:
@@ -22,7 +22,7 @@ def build_settings(tmp_path, **overrides) -> Settings:
 
 
 async def test_startup_syncs_webhook_for_public_https_base_url(tmp_path):
-    settings = build_settings(tmp_path, BASE_URL="https://demo.trycloudflare.com")
+    settings = build_settings(tmp_path, BASE_URL="https://scheduler.example.com")
     app = create_app(settings)
     app.state.bot.set_webhook = AsyncMock()
 
@@ -33,7 +33,7 @@ async def test_startup_syncs_webhook_for_public_https_base_url(tmp_path):
     app.state.bot.set_webhook.assert_awaited_once()
     assert (
         app.state.bot.set_webhook.await_args.kwargs["url"]
-        == "https://demo.trycloudflare.com/webhooks/telegram"
+        == "https://scheduler.example.com/webhooks/telegram"
     )
 
 

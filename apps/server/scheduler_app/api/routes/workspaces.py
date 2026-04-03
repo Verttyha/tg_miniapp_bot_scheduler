@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from scheduler_app.deps import get_current_user, get_session
-from scheduler_app.models import User
-from scheduler_app.schemas import WorkspaceRead
+from scheduler_app.core.deps import get_current_user, get_session
+from scheduler_app.domain.models import User
+from scheduler_app.domain.schemas import WorkspaceRead
 from scheduler_app.services.common import NotFoundError
 from scheduler_app.services.presenters import workspace_read
 from scheduler_app.services.workspaces import WorkspaceService

@@ -2,14 +2,14 @@ from aiogram import Bot
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from scheduler_app.deps import get_bot, get_current_user, get_session, get_settings, get_cipher
-from scheduler_app.models import User
-from scheduler_app.schemas import PollCreateRequest, PollRead, PollResolveRequest, VoteRequest
-from scheduler_app.security import TokenCipher
+from scheduler_app.core.deps import get_bot, get_current_user, get_session, get_settings, get_cipher
+from scheduler_app.core.security import TokenCipher
+from scheduler_app.core.settings import Settings
+from scheduler_app.domain.models import User
+from scheduler_app.domain.schemas import PollCreateRequest, PollRead, PollResolveRequest, VoteRequest
 from scheduler_app.services.common import NotFoundError, PermissionDeniedError, ServiceError
 from scheduler_app.services.polls import PollService
 from scheduler_app.services.presenters import poll_read
-from scheduler_app.settings import Settings
 
 
 router = APIRouter()

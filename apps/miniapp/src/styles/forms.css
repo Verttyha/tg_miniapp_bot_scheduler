@@ -1,0 +1,144 @@
+.line-field {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.line-field > span {
+  padding-top: 14px;
+  color: var(--muted);
+  font-size: 0.96rem;
+  font-weight: 700;
+}
+
+.line-field__control {
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--bg-card);
+  padding: 14px 16px;
+}
+
+.line-field__control input,
+.line-field__control textarea,
+.field-stack input,
+.field-stack select,
+.field-stack textarea {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  outline: none;
+}
+
+.line-field__control textarea {
+  resize: vertical;
+  min-height: 88px;
+}
+
+.line-field__control input::placeholder,
+.line-field__control textarea::placeholder,
+.field-stack input::placeholder,
+.field-stack textarea::placeholder {
+  color: rgba(143, 164, 191, 0.72);
+}
+
+.time-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.time-fields span,
+.field-stack span {
+  color: var(--muted);
+}
+
+.participant-section,
+.options-section {
+  display: grid;
+  gap: 14px;
+}
+
+.participant-section__header,
+.integration-card__header,
+.mobile-section__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+}
+
+.participant-section__header h2,
+.integration-card h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.participant-list {
+  display: grid;
+  gap: 12px;
+}
+
+.participant-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 48px;
+  padding: 0 2px;
+}
+
+.participant-item__check {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--line-strong);
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.participant-item__check input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.participant-item__check--active {
+  border-color: rgba(76, 178, 255, 0.46);
+  background: rgba(76, 178, 255, 0.12);
+}
+
+.participant-item__check--active::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 1px;
+  width: 6px;
+  height: 12px;
+  border-right: 2px solid var(--accent);
+  border-bottom: 2px solid var(--accent);
+  transform: rotate(42deg);
+}
+
+.field-stack {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 18px;
+}
+
+.field-stack select {
+  appearance: none;
+}
+
+.text-link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font-weight: 700;
+}

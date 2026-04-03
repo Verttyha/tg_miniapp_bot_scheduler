@@ -5,10 +5,10 @@ from urllib.parse import quote, urlencode
 
 import httpx
 
+from scheduler_app.core.security import TokenCipher
+from scheduler_app.core.settings import Settings
+from scheduler_app.domain.models import CalendarConnection, Event, ExternalEventMapping, User
 from scheduler_app.integrations.base import ProviderEventRef, ProviderTokens
-from scheduler_app.models import CalendarConnection, Event, ExternalEventMapping, User
-from scheduler_app.security import TokenCipher
-from scheduler_app.settings import Settings
 
 
 class GoogleCalendarProvider:

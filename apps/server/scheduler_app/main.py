@@ -17,14 +17,14 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from scheduler_app.api.router import api_router
 from scheduler_app.api.routes.integrations import oauth_router
 from scheduler_app.bot.handlers import build_router as build_bot_router
-from scheduler_app.database import build_engine
-from scheduler_app.deps import get_current_user, get_session
-from scheduler_app.models import Base, User
-from scheduler_app.security import TokenCipher
+from scheduler_app.core.database import build_engine
+from scheduler_app.core.deps import get_current_user, get_session
+from scheduler_app.core.security import TokenCipher
+from scheduler_app.core.settings import Settings, get_settings
+from scheduler_app.domain.models import Base, User
 from scheduler_app.services.presenters import user_read, workspace_read
 from scheduler_app.services.scheduler import SchedulerRunner
 from scheduler_app.services.workspaces import WorkspaceService
-from scheduler_app.settings import Settings, get_settings
 
 logger = logging.getLogger(__name__)
 

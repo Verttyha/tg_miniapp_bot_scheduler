@@ -6,7 +6,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from scheduler_app.models import (
+from scheduler_app.core.security import TokenCipher
+from scheduler_app.core.settings import Settings
+from scheduler_app.domain.models import (
     AttendanceRecord,
     AttendanceStatus,
     Event,
@@ -18,12 +20,10 @@ from scheduler_app.models import (
     User,
     WorkspaceMember,
 )
-from scheduler_app.schemas import AttendanceUpdateRequest, EventCreateRequest, EventUpdateRequest
-from scheduler_app.security import TokenCipher
+from scheduler_app.domain.schemas import AttendanceUpdateRequest, EventCreateRequest, EventUpdateRequest
 from scheduler_app.services.common import NotFoundError, ensure_admin, get_workspace_member
 from scheduler_app.services.integrations import IntegrationService
 from scheduler_app.services.notifications import NotificationService
-from scheduler_app.settings import Settings
 
 
 class EventService:

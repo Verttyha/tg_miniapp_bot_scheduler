@@ -4,13 +4,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from scheduler_app.models import User, Workspace, WorkspaceMember
-from scheduler_app.schemas import AuthResponse
-from scheduler_app.security import SecurityError, build_session_token, validate_telegram_init_data
+from scheduler_app.core.security import SecurityError, build_session_token, validate_telegram_init_data
+from scheduler_app.core.settings import Settings
+from scheduler_app.domain.models import User, Workspace, WorkspaceMember
+from scheduler_app.domain.schemas import AuthResponse
 from scheduler_app.services.common import ServiceError
 from scheduler_app.services.presenters import user_read, workspace_read
 from scheduler_app.services.workspaces import WorkspaceService
-from scheduler_app.settings import Settings
 
 
 class AuthService:

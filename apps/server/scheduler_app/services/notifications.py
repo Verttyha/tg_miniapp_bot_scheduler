@@ -7,8 +7,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from scheduler_app.models import Event, NotificationJob, NotificationKind, NotificationStatus, User
-from scheduler_app.settings import Settings
+from scheduler_app.core.settings import Settings
+from scheduler_app.domain.models import Event, NotificationJob, NotificationKind, NotificationStatus, User
 
 
 def ensure_utc(value: datetime) -> datetime:

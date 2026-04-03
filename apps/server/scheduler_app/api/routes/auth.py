@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from scheduler_app.deps import get_session, get_settings
-from scheduler_app.schemas import AuthInitDataRequest, AuthResponse
-from scheduler_app.security import SecurityError
+from scheduler_app.core.deps import get_session, get_settings
+from scheduler_app.core.security import SecurityError
+from scheduler_app.core.settings import Settings
+from scheduler_app.domain.schemas import AuthInitDataRequest, AuthResponse
 from scheduler_app.services.auth import AuthService
-from scheduler_app.settings import Settings
 
 
 router = APIRouter()

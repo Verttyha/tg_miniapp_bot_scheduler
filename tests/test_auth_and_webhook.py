@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
-from scheduler_app.models import User, Workspace, WorkspaceMember, WorkspaceRole
+from scheduler_app.domain.models import User, Workspace, WorkspaceMember, WorkspaceRole
 
 from tests.conftest import authenticate
 

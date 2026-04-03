@@ -1,7 +1,9 @@
 import {
+  bindMiniAppCssVars,
   bindThemeParamsCssVars,
   bindViewportCssVars,
   init,
+  mountMiniAppSync,
   mountThemeParamsSync,
   mountViewport,
   retrieveRawInitData
@@ -22,6 +24,12 @@ declare global {
 export async function initTelegramApp(): Promise<string> {
   try {
     init();
+    if (mountMiniAppSync.isAvailable()) {
+      mountMiniAppSync();
+    }
+    if (bindMiniAppCssVars.isAvailable()) {
+      bindMiniAppCssVars();
+    }
     if (mountThemeParamsSync.isAvailable()) {
       mountThemeParamsSync();
     }

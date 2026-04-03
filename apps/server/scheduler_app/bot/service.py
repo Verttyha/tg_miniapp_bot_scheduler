@@ -4,7 +4,7 @@ from aiogram.types import User as TelegramUser
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from scheduler_app.models import User
+from scheduler_app.domain.models import User
 
 
 async def ensure_telegram_user(session: AsyncSession, telegram_user: TelegramUser) -> User:

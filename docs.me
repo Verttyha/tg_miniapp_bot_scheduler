@@ -1,0 +1,226 @@
+# Project Structure
+
+This repository contains one deployable Telegram scheduling service with a built-in Mini App frontend and Telegram bot webhook handling.
+
+## Root
+
+```text
+C:\TGminiapp
+|-- AGENTS.MD
+|-- .env
+|-- README.md
+|-- docs.me
+|-- pyproject.toml
+|-- .env.example
+|-- .gitignore
+|-- apps
+|-- data
+|-- memory-bank
+`-- tests
+```
+
+## Root Files
+
+- `AGENTS.MD` - working instructions and product context for automated contributors.
+- `.env` - local runtime configuration with secrets and deployment-specific values.
+- `README.md` - setup and deployment guide for the project.
+- `docs.me` - this file; a full map of the current repository structure.
+- `pyproject.toml` - Python package metadata, dependencies, test config, and the `telegram-scheduler` entrypoint.
+- `.env.example` - example server environment configuration.
+- `.gitignore` - excludes local dependencies, caches, databases, and generated frontend assets from version control.
+- `memory-bank/` - stored project memory, architecture notes, and active context for future work.
+
+## apps
+
+```text
+apps
+|-- miniapp
+|   |-- package.json
+|   |-- tsconfig.json
+|   |-- vite.config.ts
+|   `-- src
+`-- server
+    `-- scheduler_app
+```
+
+### apps/miniapp
+
+Frontend for the Telegram Mini App.
+
+- `package.json` - frontend dependencies and scripts.
+- `vite.config.ts` - builds the Mini App into the backend static directory.
+- `src/main.tsx` - React entrypoint and router bootstrap.
+- `src/app.tsx` - thin application shell and route composition.
+- `src/api.ts` - all HTTP requests to the backend API.
+- `src/types.ts` - shared frontend TypeScript types.
+- `src/telegram.ts` - Telegram Mini Apps SDK initialization and theme/viewport CSS variable binding.
+
+```text
+src
+|-- components
+|   |-- dashboard
+|   |-- forms
+|   |-- layout
+|   `-- ui
+|-- hooks
+|-- lib
+|-- pages
+`-- styles
+```
+
+- `src/components/dashboard/` - dashboard-specific presentational pieces such as event and provider cards.
+- `src/components/forms/` - reusable form blocks such as participant selection and poll option fields.
+- `src/components/layout/` - outer app shell and shared screen header.
+- `src/components/ui/` - generic UI building blocks such as `LineField` and `StatsCard`.
+- `src/hooks/use-session-state.ts` - Mini App bootstrap, token persistence, and session refresh lifecycle.
+- `src/lib/` - date helpers, formatters, workspace helpers, and stable frontend constants.
+- `src/pages/` - route-level screens for dashboard, event editor, poll editor, poll detail, integrations, and stats.
+- `src/styles/index.css` - CSS entrypoint importing the decomposed style layers.
+- `src/styles/tokens.css` - theme tokens and root CSS variables.
+- `src/styles/base.css` - reset and document-level styles.
+- `src/styles/layout.css` - shared shell and screen layout.
+- `src/styles/surfaces.css` - shared surface, card, action, and status styles.
+- `src/styles/dashboard.css` - dashboard-specific layout and card styling.
+- `src/styles/forms.css` - field, participant, and editor form styling.
+- `src/styles/responsive.css` - responsive breakpoints and hover behavior.
+
+### apps/server/scheduler_app
+
+Backend application package.
+
+```text
+scheduler_app
+|-- __init__.py
+|-- main.py
+|-- api
+|-- bot
+|-- core
+|-- domain
+|-- integrations
+|-- services
+`-- static
+```
+
+#### main runtime
+
+- `main.py` - FastAPI app factory, lifespan setup, webhook sync, scheduler triggering, root routes, and static Mini App serving.
+- `__init__.py` - package marker.
+
+#### api
+
+HTTP routing layer.
+
+- `api/router.py` - top-level API router composition.
+- `api/routes/auth.py` - Telegram init-data authentication.
+- `api/routes/events.py` - event CRUD and attendance update endpoints.
+- `api/routes/integrations.py` - calendar connection endpoints and OAuth callbacks.
+- `api/routes/polls.py` - poll creation, voting, and resolution endpoints.
+- `api/routes/stats.py` - attendance and participation statistics endpoints.
+- `api/routes/workspaces.py` - workspace listing endpoints.
+
+#### bot
+
+Telegram bot handlers and bot-specific service logic.
+
+- `bot/handlers.py` - `/start`, `/setup`, admin interactions, and Telegram update routing.
+- `bot/service.py` - helper functions used by the bot layer.
+
+#### core
+
+Runtime primitives used across the backend.
+
+- `core/settings.py` - environment-based app configuration and derived URLs/paths.
+- `core/database.py` - SQLAlchemy base, engine, and async sessionmaker creation.
+- `core/deps.py` - FastAPI dependency providers for settings, DB session, bot, cipher, and current user.
+- `core/security.py` - token signing, session token parsing, OAuth state signing, Telegram init-data validation, and encrypted credential handling.
+
+#### domain
+
+Persistence and API contract layer.
+
+- `domain/models.py` - SQLAlchemy models for users, workspaces, events, polls, attendance, notifications, and calendar mappings.
+- `domain/schemas.py` - Pydantic request and response schemas used by the API and services.
+
+#### integrations
+
+External calendar providers.
+
+- `integrations/base.py` - shared integration interface/contracts.
+- `integrations/google.py` - Google Calendar integration.
+- `integrations/yandex.py` - Yandex Calendar integration via CalDAV.
+
+#### services
+
+Business logic layer.
+
+- `services/auth.py` - session bootstrap and user/workspace onboarding.
+- `services/common.py` - common workspace and permission helpers.
+- `services/events.py` - event creation, update, sync, and attendance operations.
+- `services/integrations.py` - provider connection lifecycle and calendar selection logic.
+- `services/notifications.py` - reminder and notification delivery orchestration.
+- `services/polls.py` - poll lifecycle, Telegram chat poll sync, voting, and finalization.
+- `services/presenters.py` - model-to-schema serialization helpers.
+- `services/scheduler.py` - in-process periodic scheduler runner.
+- `services/stats.py` - attendance statistics aggregation.
+- `services/workspaces.py` - workspace queries and auto-join behavior.
+
+#### static
+
+Backend-served frontend artifacts.
+
+- `static/app/.gitkeep` - keeps the generated frontend output directory in the repository.
+- `static/app/index.html` and `static/app/assets/` - generated by the Vite build and intentionally excluded from version control.
+
+## data
+
+Runtime data directory.
+
+- `data/app.db` - SQLite database file used by default in local/server single-node deployments.
+- `data/.gitkeep` - keeps the directory in the repository.
+
+This directory is intentionally kept because it stores real application data.
+
+## memory-bank
+
+Project memory files used to store stable context across work sessions.
+
+- `memory-bank/activeContext.md` - compact active context in the standard Memory Bank naming style.
+- `memory-bank/active-context.md` - current priorities and next steps.
+- `memory-bank/architecture-decisions.md` - major structural decisions for the project.
+- `memory-bank/productContext.md` - product-level context and user interaction model.
+- `memory-bank/progress.md` - recent implementation progress and cleanup notes.
+- `memory-bank/projectbrief.md` - compact project brief in the standard Memory Bank naming style.
+- `memory-bank/project-brief.md` - high-level summary of the product and repository.
+- `memory-bank/stack.md` - technology stack and deployment model.
+- `memory-bank/systemPatterns.md` - recurring architectural and service patterns.
+- `memory-bank/techContext.md` - condensed technical environment summary.
+
+## tests
+
+Automated backend test suite.
+
+- `tests/conftest.py` - shared fixtures, auth bootstrap helpers, app/client setup.
+- `tests/test_auth_and_webhook.py` - auth, bot/webhook, and workspace setup flow tests.
+- `tests/test_events_and_stats.py` - event and statistics behavior tests.
+- `tests/test_scheduler_and_polls.py` - scheduler and poll lifecycle tests.
+- `tests/test_settings.py` - settings defaults/overrides tests.
+- `tests/test_startup_webhook_sync.py` - webhook sync behavior for public vs local `BASE_URL`.
+
+## What Was Removed
+
+The repository was intentionally cleaned from non-essential local artifacts:
+
+- virtual environment folders
+- `node_modules`
+- Python cache folders
+- pytest cache
+- tunnel helper scripts and tunnel-specific backend code
+- generated packaging metadata such as `egg-info`
+- IDE project folders
+- generated frontend build output
+
+## Current Deployment Model
+
+- One Python service runs the API, Telegram webhook handler, scheduler, and static Mini App serving.
+- The Mini App frontend is built separately from `apps/miniapp` and emitted into `apps/server/scheduler_app/static/app`.
+- `BASE_URL` is the single public source of truth for Mini App links, OAuth callbacks, and Telegram webhook registration.

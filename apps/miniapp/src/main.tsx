@@ -2,7 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { App } from "./app";
-import "./styles.css";
+import "./styles/index.css";
 
 const routerBase = import.meta.env.BASE_URL.replace(/\/+$/, "") || "/";
 

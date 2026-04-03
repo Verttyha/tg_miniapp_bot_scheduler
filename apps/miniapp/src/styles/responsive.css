@@ -1,0 +1,85 @@
+@media (hover: hover) {
+  .action-strip:hover,
+  .action-pill:hover,
+  .dashboard-shortcut:hover,
+  .provider-card:hover,
+  .event-card:hover,
+  .poll-feature:hover,
+  .text-link:hover {
+    transform: translateY(-1px);
+  }
+}
+
+@media (max-width: 1024px) {
+  .dashboard-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-sidebar {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .primary-actions--sidebar,
+  .dashboard-shortcuts,
+  .status-banner {
+    grid-column: 1 / -1;
+  }
+
+  .dashboard-main {
+    grid-template-columns: 1fr;
+  }
+
+  .surface-panel--events {
+    grid-row: auto;
+  }
+}
+
+@media (max-width: 720px) {
+  .app-shell__screen {
+    padding: 14px 12px 18px;
+  }
+
+  .dashboard-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-sidebar {
+    grid-template-columns: 1fr;
+  }
+
+  .event-card,
+  .event-card--featured {
+    grid-template-columns: 1fr;
+  }
+
+  .event-card__aside {
+    justify-items: start;
+    grid-auto-flow: column;
+    justify-content: start;
+  }
+
+  .provider-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .line-field {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .line-field > span {
+    padding-top: 0;
+  }
+}
+
+@media (min-width: 721px) {
+  .app-shell__screen {
+    padding: 28px 22px 34px;
+  }
+
+  .empty-state,
+  .editor-screen,
+  .detail-screen {
+    padding: 0;
+  }
+}

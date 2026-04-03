@@ -13,8 +13,8 @@ from httpx import ASGITransport, AsyncClient, Response
 from sqlalchemy import select
 
 from scheduler_app.main import create_app
-from scheduler_app.models import TelegramChat, User, Workspace, WorkspaceMember, WorkspaceRole
-from scheduler_app.settings import Settings
+from scheduler_app.core.settings import Settings
+from scheduler_app.domain.models import TelegramChat, User, Workspace, WorkspaceMember, WorkspaceRole
 
 
 def build_init_data(bot_token: str, user_payload: dict) -> str:

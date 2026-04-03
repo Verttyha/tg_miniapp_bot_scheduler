@@ -4,8 +4,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from scheduler_app.models import AttendanceStatus, Event, EventParticipant, User, WorkspaceMember
-from scheduler_app.schemas import StatsEntryRead
+from scheduler_app.domain.models import AttendanceStatus, Event, EventParticipant, User, WorkspaceMember
+from scheduler_app.domain.schemas import StatsEntryRead
 from scheduler_app.services.common import NotFoundError, get_workspace_member
 from scheduler_app.services.presenters import stats_summary, user_read
 

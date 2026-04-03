@@ -2,14 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from scheduler_app.deps import get_current_user, get_session, get_settings, get_cipher
-from scheduler_app.models import User
-from scheduler_app.schemas import CalendarConnectionRead, IntegrationLinkResponse, IntegrationUpdateRequest
-from scheduler_app.security import SecurityError, TokenCipher
+from scheduler_app.core.deps import get_current_user, get_session, get_settings, get_cipher
+from scheduler_app.core.security import SecurityError, TokenCipher
+from scheduler_app.core.settings import Settings
+from scheduler_app.domain.models import User
+from scheduler_app.domain.schemas import CalendarConnectionRead, IntegrationLinkResponse, IntegrationUpdateRequest
 from scheduler_app.services.common import NotFoundError, PermissionDeniedError
 from scheduler_app.services.integrations import IntegrationService
 from scheduler_app.services.presenters import connection_read
-from scheduler_app.settings import Settings
 
 
 router = APIRouter(prefix="/integrations")

@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 
 from sqlalchemy import select
 
-from scheduler_app.models import TelegramChatPoll
+from scheduler_app.domain.models import TelegramChatPoll
 from tests.conftest import authenticate, seed_workspace
 
 

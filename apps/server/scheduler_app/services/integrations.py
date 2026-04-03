@@ -5,13 +5,13 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from scheduler_app.core.security import TokenCipher, build_oauth_state, read_oauth_state
+from scheduler_app.core.settings import Settings
+from scheduler_app.domain.models import CalendarConnection, ConnectionStatus, User
+from scheduler_app.domain.schemas import IntegrationUpdateRequest
 from scheduler_app.integrations.google import GoogleCalendarProvider
 from scheduler_app.integrations.yandex import YandexCalendarProvider
-from scheduler_app.models import CalendarConnection, ConnectionStatus, User
-from scheduler_app.schemas import IntegrationUpdateRequest
-from scheduler_app.security import TokenCipher, build_oauth_state, read_oauth_state
 from scheduler_app.services.common import NotFoundError, PermissionDeniedError
-from scheduler_app.settings import Settings
 
 
 class IntegrationService:

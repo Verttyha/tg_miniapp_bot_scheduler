@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from scheduler_app.models import CalendarConnection, Event, Poll, User, Workspace
-from scheduler_app.schemas import (
+from scheduler_app.domain.models import CalendarConnection, Event, Poll, User, Workspace
+from scheduler_app.domain.schemas import (
     CalendarConnectionRead,
     CalendarOptionRead,
     EventRead,

@@ -1,0 +1,22 @@
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap");
+
+:root {
+  color-scheme: dark;
+  --bg-base: var(--tg-theme-bg-color, #08111d);
+  --bg-elevated: rgba(10, 18, 30, 0.86);
+  --bg-soft: rgba(18, 28, 44, 0.9);
+  --bg-card: rgba(14, 23, 38, 0.82);
+  --bg-card-strong: rgba(21, 33, 52, 0.98);
+  --bg-card-muted: rgba(255, 255, 255, 0.04);
+  --line: rgba(143, 164, 191, 0.14);
+  --line-strong: rgba(143, 164, 191, 0.24);
+  --text: var(--tg-theme-text-color, #eef5ff);
+  --muted: var(--tg-theme-hint-color, #8fa4bf);
+  --accent: var(--tg-theme-button-color, #4cb2ff);
+  --accent-strong: #2e8cff;
+  --accent-soft: rgba(76, 178, 255, 0.16);
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #fb7185;
+  --shadow: 0 30px 80px rgba(0, 0, 0, 0.34);
+}

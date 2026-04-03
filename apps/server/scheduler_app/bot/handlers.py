@@ -8,12 +8,12 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from scheduler_app.bot.service import ensure_telegram_user
-from scheduler_app.models import Workspace, WorkspaceMember, WorkspaceRole
-from scheduler_app.security import TokenCipher
+from scheduler_app.core.security import TokenCipher
+from scheduler_app.core.settings import Settings
+from scheduler_app.domain.models import Workspace, WorkspaceMember, WorkspaceRole
 from scheduler_app.services.common import ConflictError, NotFoundError, PermissionDeniedError
 from scheduler_app.services.polls import PollService
 from scheduler_app.services.workspaces import WorkspaceService
-from scheduler_app.settings import Settings
 
 
 def build_router(session_factory: async_sessionmaker, settings: Settings) -> Router:
