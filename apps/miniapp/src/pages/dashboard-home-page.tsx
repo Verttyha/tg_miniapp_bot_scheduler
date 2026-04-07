@@ -98,19 +98,31 @@ export function DashboardHomePage({ token, session }: { token: string; session: 
     let active = true;
     setLoading(true);
 
+    void getIntegrations(token)
+      .then((connectionData) => {
+        if (!active) {
+          return;
+        }
+        setConnections(connectionData);
+      })
+      .catch(() => {
+        if (!active) {
+          return;
+        }
+        setConnections([]);
+      });
+
     (async () => {
       try {
-        const [eventData, pollData, connectionData] = await Promise.all([
+        const [eventData, pollData] = await Promise.all([
           getWorkspaceEvents(workspaceDataId, token),
           getWorkspacePolls(workspaceDataId, token),
-          getIntegrations(token)
         ]);
         if (!active) {
           return;
         }
         setEvents(eventData);
         setPolls(pollData);
-        setConnections(connectionData);
         setError(null);
       } catch (requestError) {
         if (active) {
