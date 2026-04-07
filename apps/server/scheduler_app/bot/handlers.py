@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from aiogram import F, Router
 from aiogram.exceptions import TelegramAPIError
+from aiogram.filters.chat_member_updated import ADMINISTRATOR, ChatMemberUpdatedFilter, KICKED, LEFT, MEMBER
 from aiogram.filters import Command, CommandStart
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message, PollAnswer, WebAppInfo
+from aiogram.types import CallbackQuery, ChatMemberUpdated, InlineKeyboardButton, InlineKeyboardMarkup, Message, PollAnswer, WebAppInfo
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
@@ -14,6 +15,8 @@ from scheduler_app.domain.models import Workspace, WorkspaceMember, WorkspaceRol
 from scheduler_app.services.common import ConflictError, NotFoundError, PermissionDeniedError
 from scheduler_app.services.polls import PollService
 from scheduler_app.services.workspaces import WorkspaceService
+
+TELEGRAM_ANONYMOUS_ADMIN_ID = 1087968824
 
 
 def build_router(session_factory: async_sessionmaker, settings: Settings) -> Router:
@@ -200,7 +203,18 @@ def build_router(session_factory: async_sessionmaker, settings: Settings) -> Rou
         )
 
     async def ensure_group_workspace(message: Message) -> None:
-        if not message.from_user:
+        if (
+            not message.from_user
+            or message.from_user.is_bot
+            or message.from_user.id == TELEGRAM_ANONYMOUS_ADMIN_ID
+        ):
+            try:
+                await message.answer(
+                    "Не удалось назначить владельца календаря автоматически. "
+                    "Запустите /setup с обычного аккаунта администратора (не в анонимном режиме)."
+                )
+            except TelegramAPIError:
+                return
             return
         async with session_factory() as session:
             actor = await ensure_telegram_user(session, message.from_user)
@@ -337,6 +351,37 @@ def build_router(session_factory: async_sessionmaker, settings: Settings) -> Rou
         async with session_factory() as session:
             service = PollService(session, settings, cipher)
             await service.sync_telegram_poll_answer(answer)
+            await session.commit()
+
+    @router.my_chat_member(ChatMemberUpdatedFilter(member_status_changed=KICKED | LEFT))
+    async def bot_removed_from_chat_handler(update: ChatMemberUpdated) -> None:
+        if update.chat.type not in {"group", "supergroup"}:
+            return
+        async with session_factory() as session:
+            await WorkspaceService(session).detach_workspace_for_chat(
+                telegram_chat_id=update.chat.id
+            )
+            await session.commit()
+
+    @router.my_chat_member(ChatMemberUpdatedFilter(member_status_changed=MEMBER | ADMINISTRATOR))
+    async def bot_added_to_chat_handler(update: ChatMemberUpdated) -> None:
+        if update.chat.type not in {"group", "supergroup"}:
+            return
+        if (
+            not update.from_user
+            or update.from_user.is_bot
+            or update.from_user.id == TELEGRAM_ANONYMOUS_ADMIN_ID
+        ):
+            return
+
+        async with session_factory() as session:
+            actor = await ensure_telegram_user(session, update.from_user)
+            await WorkspaceService(session).ensure_group_workspace(
+                actor=actor,
+                telegram_chat_id=update.chat.id,
+                title=update.chat.title or "Group workspace",
+                chat_type=update.chat.type,
+            )
             await session.commit()
 
     return router

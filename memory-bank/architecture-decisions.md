@@ -53,3 +53,44 @@ Why:
 - the previous frontend was too dense to evolve safely
 - smaller files make future UI work faster and less error-prone
 - decomposed CSS is easier to maintain without breaking unrelated screens
+
+## 2026-04-03: Detach chat-linked workspace when bot is removed from Telegram group
+
+Decision:
+
+- handle Telegram `my_chat_member` updates for `LEFT` and `KICKED`
+- add service method that detaches `Workspace.telegram_chat_id` and removes `TelegramChat` record
+- filter workspace listings to show only active chat-bound workspaces
+
+Why:
+
+- users should not see stale chats after bot removal from Telegram
+- data consistency between Telegram state and bot/mini app state must be automatic
+- historical workspace data can stay in DB without being shown as active chat workspace
+
+## 2026-04-03: Bind Mini App session to current Telegram account and disable implicit workspace auto-join
+
+Decision:
+
+- always call auth bootstrap with Telegram `initData` when Mini App is opened
+- replace local token with the token returned from bootstrap
+- stop auto-joining users into the single available workspace in both auth bootstrap and `/api/me`
+
+Why:
+
+- prevents session bleed between different Telegram accounts on one device
+- avoids showing unrelated chats/workspaces to new accounts
+- keeps membership changes explicit and traceable
+
+## 2026-04-03: Protect workspace owner assignment from anonymous/bot actors
+
+Decision:
+
+- ignore workspace auto-setup from `my_chat_member` when actor is bot or `GroupAnonymousBot` (`1087968824`)
+- block `/setup` owner assignment for bot/anonymous senders
+- when a workspace owner is the anonymous placeholder, reassign ownership to the first real human who runs setup
+
+Why:
+
+- anonymous/bot actors produce invalid owners that cannot administer events
+- real chat admins need a deterministic way to recover ownership

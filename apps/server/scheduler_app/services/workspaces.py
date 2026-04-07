@@ -7,6 +7,8 @@ from sqlalchemy.orm import selectinload
 from scheduler_app.domain.models import TelegramChat, User, Workspace, WorkspaceMember, WorkspaceRole
 from scheduler_app.services.common import ConflictError, NotFoundError, PermissionDeniedError
 
+TELEGRAM_ANONYMOUS_ADMIN_ID = 1087968824
+
 
 class WorkspaceService:
     def __init__(self, session: AsyncSession):
@@ -40,7 +42,11 @@ class WorkspaceService:
     async def list_for_user(self, user: User) -> list[Workspace]:
         memberships = await self.session.scalars(
             select(WorkspaceMember)
-            .where(WorkspaceMember.user_id == user.id)
+            .join(Workspace, WorkspaceMember.workspace_id == Workspace.id)
+            .where(
+                WorkspaceMember.user_id == user.id,
+                Workspace.telegram_chat_id.is_not(None),
+            )
             .options(
                 selectinload(WorkspaceMember.workspace)
                 .selectinload(Workspace.members)
@@ -52,14 +58,21 @@ class WorkspaceService:
 
     async def auto_join_single_workspace(self, user: User) -> Workspace | None:
         existing_membership = await self.session.scalar(
-            select(WorkspaceMember).where(WorkspaceMember.user_id == user.id)
+            select(WorkspaceMember)
+            .join(Workspace, WorkspaceMember.workspace_id == Workspace.id)
+            .where(
+                WorkspaceMember.user_id == user.id,
+                Workspace.telegram_chat_id.is_not(None),
+            )
         )
         if existing_membership:
             return None
 
         workspaces = (
             await self.session.scalars(
-                select(Workspace).options(selectinload(Workspace.members).selectinload(WorkspaceMember.user))
+                select(Workspace)
+                .where(Workspace.telegram_chat_id.is_not(None))
+                .options(selectinload(Workspace.members).selectinload(WorkspaceMember.user))
             )
         ).all()
         if len(workspaces) != 1:
@@ -114,7 +127,10 @@ class WorkspaceService:
         workspaces = (
             await self.session.scalars(
                 select(Workspace)
-                .where(Workspace.owner_user_id == user.id)
+                .where(
+                    Workspace.owner_user_id == user.id,
+                    Workspace.telegram_chat_id.is_not(None),
+                )
                 .options(
                     selectinload(Workspace.members).selectinload(WorkspaceMember.user),
                     selectinload(Workspace.telegram_chat),
@@ -210,7 +226,10 @@ class WorkspaceService:
         workspace = await self.session.scalar(
             select(Workspace)
             .where(Workspace.telegram_chat_id == chat.id)
-            .options(selectinload(Workspace.members).selectinload(WorkspaceMember.user))
+            .options(
+                selectinload(Workspace.members).selectinload(WorkspaceMember.user),
+                selectinload(Workspace.owner),
+            )
         )
         created_workspace = False
         if not workspace:
@@ -218,6 +237,9 @@ class WorkspaceService:
             self.session.add(workspace)
             await self.session.flush()
             created_workspace = True
+        elif workspace.owner and workspace.owner.telegram_user_id == TELEGRAM_ANONYMOUS_ADMIN_ID:
+            workspace.owner_user_id = actor.id
+            await self.session.flush()
 
         membership = await self.session.scalar(
             select(WorkspaceMember).where(
@@ -240,3 +262,19 @@ class WorkspaceService:
             )
             await self.session.flush()
         return await self._normalize_owner_memberships(workspace)
+
+    async def detach_workspace_for_chat(self, *, telegram_chat_id: int) -> None:
+        chat = await self.session.scalar(
+            select(TelegramChat).where(TelegramChat.telegram_chat_id == telegram_chat_id)
+        )
+        if not chat:
+            return
+
+        workspace = await self.session.scalar(
+            select(Workspace).where(Workspace.telegram_chat_id == chat.id)
+        )
+        if workspace:
+            workspace.telegram_chat_id = None
+
+        await self.session.delete(chat)
+        await self.session.flush()
