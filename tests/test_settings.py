@@ -28,3 +28,9 @@ def test_frontend_dist_dir_points_to_scheduler_static_app():
     settings = Settings(_env_file=None)
 
     assert settings.frontend_dist_dir == Path("C:/TGminiapp/apps/server/scheduler_app/static/app")
+
+
+def test_telegram_proxy_url_can_be_overridden():
+    settings = Settings(_env_file=None, TELEGRAM_PROXY_URL="socks5://127.0.0.1:1080")
+
+    assert settings.telegram_proxy_url == "socks5://127.0.0.1:1080"

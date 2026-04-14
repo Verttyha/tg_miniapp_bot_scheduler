@@ -7,6 +7,7 @@ import re
 import uvicorn
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.exceptions import TelegramAPIError
 from aiogram.enums import ParseMode
 from aiogram.types import Update
@@ -47,9 +48,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     engine = build_engine(runtime_settings)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     cipher = TokenCipher(runtime_settings.app_secret)
+    bot_session = (
+        AiohttpSession(proxy=runtime_settings.telegram_proxy_url)
+        if runtime_settings.telegram_proxy_url
+        else None
+    )
     bot = Bot(
         runtime_settings.bot_token,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+        session=bot_session,
     )
     dispatcher = Dispatcher()
     dispatcher.include_router(build_bot_router(session_factory, runtime_settings))

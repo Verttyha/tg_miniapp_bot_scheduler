@@ -9,6 +9,7 @@ description = "Single-service Telegram scheduler with Mini App, bot, SQLite, and
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+  "aiohttp-socks>=0.10.0,<1.0.0",
   "aiogram>=3.25.0,<4.0.0",
   "aiosqlite>=0.20.0,<1.0.0",
   "caldav>=2.1.1,<3.0.0",

@@ -57,6 +57,7 @@ Fill at least:
 - `BOT_TOKEN`
 - `BOT_USERNAME`
 - `BASE_URL=https://your-domain.example`
+- `TELEGRAM_PROXY_URL=socks5://127.0.0.1:1080` (when Telegram API is blocked from your server)
 
 Recommended server defaults:
 
@@ -64,6 +65,7 @@ Recommended server defaults:
 APP_ENV=production
 ALLOW_INSECURE_DEV_AUTH=false
 SYNC_TELEGRAM_WEBHOOK_ON_STARTUP=true
+TELEGRAM_PROXY_URL=
 ```
 
 ### 3. Build the Mini App
@@ -97,6 +99,8 @@ After startup:
 The bot receives updates through `POST /webhooks/telegram`.
 
 If `BASE_URL` points to a public `https` domain and `SYNC_TELEGRAM_WEBHOOK_ON_STARTUP=true`, the application syncs the webhook automatically on startup.
+
+If your server cannot reach `api.telegram.org` directly, set `TELEGRAM_PROXY_URL` (for example, `socks5://127.0.0.1:1080`). The proxy is used for all Telegram Bot API requests, including startup webhook sync.
 
 Manual webhook registration:
 
