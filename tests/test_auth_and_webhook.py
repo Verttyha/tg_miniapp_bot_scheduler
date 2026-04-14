@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from sqlalchemy import select
 
 from scheduler_app.domain.models import TelegramChat, User, Workspace, WorkspaceMember, WorkspaceRole
@@ -486,3 +488,110 @@ async def test_bot_removed_from_group_detaches_workspace(client, app, settings, 
     assert workspace is not None
     assert workspace.telegram_chat_id is None
     assert current_payload["workspaces"] == []
+
+
+async def test_bot_added_to_group_sends_welcome_with_connect_buttons(client, settings, telegram_mock):
+    added_payload = {
+        "update_id": 61,
+        "my_chat_member": {
+            "chat": {"id": -100260, "type": "group", "title": "Travel club"},
+            "from": {
+                "id": 111060,
+                "is_bot": False,
+                "first_name": "Admin",
+                "username": "traveladmin",
+            },
+            "date": 1_700_000_600,
+            "old_chat_member": {
+                "user": {
+                    "id": 123456,
+                    "is_bot": True,
+                    "first_name": "SchedulerBot",
+                    "username": "test_scheduler_bot",
+                },
+                "status": "left",
+            },
+            "new_chat_member": {
+                "user": {
+                    "id": 123456,
+                    "is_bot": True,
+                    "first_name": "SchedulerBot",
+                    "username": "test_scheduler_bot",
+                },
+                "status": "member",
+            },
+        },
+    }
+
+    response = await client.post("/webhooks/telegram", json=added_payload)
+    response.raise_for_status()
+
+    send_message_calls = [call for call in telegram_mock.calls if "/sendMessage" in call.request.url.path]
+    assert send_message_calls
+
+    request_payload = json.loads(send_message_calls[-1].request.content.decode("utf-8"))
+    keyboard = request_payload["reply_markup"]["inline_keyboard"][0]
+    button_texts = {button["text"] for button in keyboard}
+
+    assert request_payload["chat_id"] == -100260
+    assert "Подключиться" in button_texts
+    assert "Вступить" in button_texts
+
+
+async def test_group_connect_callback_adds_pressing_user_to_workspace(client, app, settings, telegram_mock):
+    setup_payload = {
+        "update_id": 71,
+        "message": {
+            "message_id": 71,
+            "date": 1_700_000_700,
+            "chat": {"id": -100270, "type": "group", "title": "Chess club"},
+            "from": {
+                "id": 111070,
+                "is_bot": False,
+                "first_name": "Owner",
+                "username": "owner70",
+            },
+            "text": "/setup",
+            "entities": [{"offset": 0, "length": 6, "type": "bot_command"}],
+        },
+    }
+    setup_response = await client.post("/webhooks/telegram", json=setup_payload)
+    setup_response.raise_for_status()
+
+    connect_payload = {
+        "update_id": 72,
+        "callback_query": {
+            "id": "cbq-group-connect",
+            "from": {
+                "id": 111071,
+                "is_bot": False,
+                "first_name": "Member",
+                "username": "member71",
+            },
+            "message": {
+                "message_id": 720,
+                "date": 1_700_000_701,
+                "chat": {"id": -100270, "type": "group", "title": "Chess club"},
+                "text": "Привет! Я помогу вести общий календарь.",
+            },
+            "chat_instance": "group-connect-instance",
+            "data": "workspace:connect",
+        },
+    }
+    connect_response = await client.post("/webhooks/telegram", json=connect_payload)
+    connect_response.raise_for_status()
+
+    async with app.state.session_factory() as session:
+        workspace = await session.scalar(select(Workspace).where(Workspace.name == "Chess club"))
+        member = await session.scalar(select(User).where(User.telegram_user_id == 111071))
+        membership = await session.scalar(
+            select(WorkspaceMember).where(
+                WorkspaceMember.workspace_id == workspace.id,
+                WorkspaceMember.user_id == member.id,
+            )
+        )
+
+    assert workspace is not None
+    assert member is not None
+    assert membership is not None
+    assert membership.role == WorkspaceRole.MEMBER.value

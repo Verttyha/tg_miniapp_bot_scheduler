@@ -94,3 +94,17 @@ Why:
 
 - anonymous/bot actors produce invalid owners that cannot administer events
 - real chat admins need a deterministic way to recover ownership
+
+## 2026-04-14: Group onboarding through explicit connect buttons
+
+Decision:
+
+- send a welcome message with inline buttons `Подключиться` and `Вступить` when bot is added to a group
+- process button clicks through a dedicated callback handler (`workspace:connect`) to attach user/workspace membership
+- keep `/setup` and `/start` group commands as backward-compatible fallbacks
+
+Why:
+
+- removes dependency on typing bot commands like `/start@...` in group chats
+- improves onboarding clarity for admins and participants
+- keeps ownership/membership assignment explicit and traceable from Telegram interactions

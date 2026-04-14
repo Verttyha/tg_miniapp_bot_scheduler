@@ -17,6 +17,7 @@ from scheduler_app.services.polls import PollService
 from scheduler_app.services.workspaces import WorkspaceService
 
 TELEGRAM_ANONYMOUS_ADMIN_ID = 1087968824
+GROUP_CONNECT_CALLBACK_DATA = "workspace:connect"
 
 
 def build_router(session_factory: async_sessionmaker, settings: Settings) -> Router:
@@ -94,6 +95,43 @@ def build_router(session_factory: async_sessionmaker, settings: Settings) -> Rou
                 ),
                 [InlineKeyboardButton(text="Админы чатов", callback_data="admins:menu")],
             ]
+        )
+
+    def build_group_connect_markup() -> InlineKeyboardMarkup:
+        return InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="Подключиться",
+                        callback_data=GROUP_CONNECT_CALLBACK_DATA,
+                    ),
+                    InlineKeyboardButton(
+                        text="Вступить",
+                        callback_data=GROUP_CONNECT_CALLBACK_DATA,
+                    ),
+                ]
+            ]
+        )
+
+    def build_group_welcome_text(chat_title: str | None) -> str:
+        if chat_title:
+            intro = f"Привет! Я помогу вести общий календарь чата «{chat_title}»."
+        else:
+            intro = "Привет! Я помогу вести общий календарь этого чата."
+        return (
+            f"{intro}\n"
+            "Нажмите «Подключиться» или «Вступить», чтобы присоединиться к календарю."
+        )
+
+    def build_group_connected_text(workspace_name: str, *, is_owner: bool) -> str:
+        if is_owner:
+            return (
+                f"Чат «{workspace_name}» подключён. "
+                "Вы стали владельцем календаря и можете назначать администраторов через /admins в личке бота."
+            )
+        return (
+            f"Вы вступили в календарь чата «{workspace_name}». "
+            "Теперь события и голосования будут доступны в Mini App."
         )
 
     def build_owned_workspaces_markup(workspaces: list[Workspace]) -> InlineKeyboardMarkup:
@@ -202,6 +240,25 @@ def build_router(session_factory: async_sessionmaker, settings: Settings) -> Rou
             reply_markup=build_workspace_admin_markup(workspace),
         )
 
+    async def ensure_group_workspace_for_actor(
+        *,
+        actor_user,
+        chat_id: int,
+        chat_title: str | None,
+        chat_type: str,
+    ) -> tuple[Workspace, bool]:
+        async with session_factory() as session:
+            actor = await ensure_telegram_user(session, actor_user)
+            workspace = await WorkspaceService(session).ensure_group_workspace(
+                actor=actor,
+                telegram_chat_id=chat_id,
+                title=chat_title or "Group workspace",
+                chat_type=chat_type,
+            )
+            is_owner = workspace.owner_user_id == actor.id
+            await session.commit()
+        return workspace, is_owner
+
     async def ensure_group_workspace(message: Message) -> None:
         if (
             not message.from_user
@@ -211,26 +268,23 @@ def build_router(session_factory: async_sessionmaker, settings: Settings) -> Rou
             try:
                 await message.answer(
                     "Не удалось назначить владельца календаря автоматически. "
-                    "Запустите /setup с обычного аккаунта администратора (не в анонимном режиме)."
+                    "Нажмите кнопку «Подключиться» или «Вступить» ниже с обычного аккаунта администратора.",
+                    reply_markup=build_group_connect_markup(),
                 )
             except TelegramAPIError:
                 return
             return
-        async with session_factory() as session:
-            actor = await ensure_telegram_user(session, message.from_user)
-            workspace = await WorkspaceService(session).ensure_group_workspace(
-                actor=actor,
-                telegram_chat_id=message.chat.id,
-                title=message.chat.title or "Group workspace",
-                chat_type=message.chat.type,
-            )
-            await session.commit()
+
+        workspace, is_owner = await ensure_group_workspace_for_actor(
+            actor_user=message.from_user,
+            chat_id=message.chat.id,
+            chat_title=message.chat.title,
+            chat_type=message.chat.type,
+        )
 
         try:
             await message.answer(
-                f"Чат «{workspace.name}» подключён. "
-                "Первый участник, который подключил бота, становится владельцем календаря. "
-                "Назначить администраторов можно в личке бота командой /admins."
+                build_group_connected_text(workspace.name, is_owner=is_owner)
             )
         except TelegramAPIError:
             return
@@ -336,6 +390,37 @@ def build_router(session_factory: async_sessionmaker, settings: Settings) -> Rou
         except TelegramAPIError:
             return
 
+    @router.callback_query(F.data == GROUP_CONNECT_CALLBACK_DATA)
+    async def group_connect_callback(callback: CallbackQuery) -> None:
+        if not callback.from_user:
+            return
+        if callback.from_user.is_bot or callback.from_user.id == TELEGRAM_ANONYMOUS_ADMIN_ID:
+            await safe_answer_callback(callback, "Подключение доступно только для обычных пользователей", show_alert=True)
+            return
+        if not callback.message:
+            await safe_answer_callback(callback, "Не удалось определить чат", show_alert=True)
+            return
+        if callback.message.chat.type not in {"group", "supergroup"}:
+            await safe_answer_callback(callback, "Эта кнопка работает только в группах", show_alert=True)
+            return
+
+        workspace, is_owner = await ensure_group_workspace_for_actor(
+            actor_user=callback.from_user,
+            chat_id=callback.message.chat.id,
+            chat_title=callback.message.chat.title,
+            chat_type=callback.message.chat.type,
+        )
+        await safe_answer_callback(
+            callback,
+            "Чат подключён" if is_owner else "Вы подключились к чату",
+        )
+        try:
+            await callback.message.answer(
+                build_group_connected_text(workspace.name, is_owner=is_owner)
+            )
+        except TelegramAPIError:
+            return
+
     @router.message(CommandStart(), F.chat.type.in_({"group", "supergroup"}))
     async def start_group_handler(message: Message) -> None:
         await ensure_group_workspace(message)
@@ -367,21 +452,29 @@ def build_router(session_factory: async_sessionmaker, settings: Settings) -> Rou
     async def bot_added_to_chat_handler(update: ChatMemberUpdated) -> None:
         if update.chat.type not in {"group", "supergroup"}:
             return
-        if (
-            not update.from_user
-            or update.from_user.is_bot
-            or update.from_user.id == TELEGRAM_ANONYMOUS_ADMIN_ID
-        ):
-            return
 
-        async with session_factory() as session:
-            actor = await ensure_telegram_user(session, update.from_user)
-            await WorkspaceService(session).ensure_group_workspace(
-                actor=actor,
-                telegram_chat_id=update.chat.id,
-                title=update.chat.title or "Group workspace",
-                chat_type=update.chat.type,
+        if (
+            update.from_user
+            and not update.from_user.is_bot
+            and update.from_user.id != TELEGRAM_ANONYMOUS_ADMIN_ID
+        ):
+            async with session_factory() as session:
+                actor = await ensure_telegram_user(session, update.from_user)
+                await WorkspaceService(session).ensure_group_workspace(
+                    actor=actor,
+                    telegram_chat_id=update.chat.id,
+                    title=update.chat.title or "Group workspace",
+                    chat_type=update.chat.type,
+                )
+                await session.commit()
+
+        try:
+            await update.bot.send_message(
+                chat_id=update.chat.id,
+                text=build_group_welcome_text(update.chat.title),
+                reply_markup=build_group_connect_markup(),
             )
-            await session.commit()
+        except TelegramAPIError:
+            return
 
     return router
