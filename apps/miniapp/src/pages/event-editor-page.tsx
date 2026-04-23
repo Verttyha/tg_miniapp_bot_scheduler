@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
-import { createEvent, getEvent, updateEvent } from "../api";
+import { createEvent, deleteEvent, getEvent, updateEvent } from "../api";
 import { ParticipantSelector } from "../components/forms/participant-selector";
 import { ScreenHeader } from "../components/layout/screen-header";
 import { LineField } from "../components/ui/line-field";
@@ -18,6 +18,9 @@ const EVENT_EDITOR_TEXT = {
   adminOnly:
     "\u0421\u043e\u0437\u0434\u0430\u0432\u0430\u0442\u044c \u0438 \u0438\u0437\u043c\u0435\u043d\u044f\u0442\u044c \u0441\u043e\u0431\u044b\u0442\u0438\u044f \u043c\u043e\u0433\u0443\u0442 \u0442\u043e\u043b\u044c\u043a\u043e \u0430\u0434\u043c\u0438\u043d\u0438\u0441\u0442\u0440\u0430\u0442\u043e\u0440\u044b \u0447\u0430\u0442\u0430.",
   saveError: "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0441\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u0441\u043e\u0431\u044b\u0442\u0438\u0435",
+  deleteError: "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0443\u0434\u0430\u043b\u0438\u0442\u044c \u0441\u043e\u0431\u044b\u0442\u0438\u0435",
+  noParticipants: "\u041d\u0435\u043b\u044c\u0437\u044f \u0441\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u0441\u043e\u0431\u044b\u0442\u0438\u0435 \u0431\u0435\u0437 \u0443\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u043e\u0432",
+  invalidEventTime: "\u0412\u0440\u0435\u043c\u044f \u043e\u043a\u043e\u043d\u0447\u0430\u043d\u0438\u044f \u0434\u043e\u043b\u0436\u043d\u043e \u0431\u044b\u0442\u044c \u043f\u043e\u0437\u0436\u0435 \u0432\u0440\u0435\u043c\u0435\u043d\u0438 \u043d\u0430\u0447\u0430\u043b\u0430",
   titleLabel: "\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435",
   dateLabel: "\u0414\u0430\u0442\u0430",
   timeLabel: "\u0412\u0440\u0435\u043c\u044f",
@@ -28,7 +31,8 @@ const EVENT_EDITOR_TEXT = {
   locationPlaceholder: "\u041d\u0435\u043e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u043d\u043e",
   saveButton: "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c",
   createButton: "\u0421\u043e\u0437\u0434\u0430\u0442\u044c",
-  cancelButton: "\u041e\u0442\u043c\u0435\u043d\u0430"
+  cancelButton: "\u041e\u0442\u043c\u0435\u043d\u0430",
+  deleteButton: "\u0423\u0434\u0430\u043b\u0438\u0442\u044c"
 };
 
 export function EventEditorPage({ token, session }: { token: string; session: SessionPayload }) {
@@ -98,7 +102,18 @@ export function EventEditorPage({ token, session }: { token: string; session: Se
   }, [eventId, token]);
 
   function toggleParticipant(userId: number) {
-    setSelectedIds((current) => (current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId]));
+    setSelectedIds((current) => {
+      if (!current.includes(userId)) {
+        setError(null);
+        return [...current, userId];
+      }
+      if (current.length === 1) {
+        setError(EVENT_EDITOR_TEXT.noParticipants);
+        return current;
+      }
+      setError(null);
+      return current.filter((id) => id !== userId);
+    });
   }
 
   if (!workspace && eventId && loading) {
@@ -132,6 +147,16 @@ export function EventEditorPage({ token, session }: { token: string; session: Se
 
   async function handleSubmit(submitEvent: FormEvent<HTMLFormElement>) {
     submitEvent.preventDefault();
+    if (!selectedIds.length) {
+      setError(EVENT_EDITOR_TEXT.noParticipants);
+      return;
+    }
+
+    if (endTime && endTime <= startTime) {
+      setError(EVENT_EDITOR_TEXT.invalidEventTime);
+      return;
+    }
+
     const payload = {
       title,
       description,
@@ -151,6 +176,21 @@ export function EventEditorPage({ token, session }: { token: string; session: Se
       navigate(`/workspaces/${workspace.id}`);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : EVENT_EDITOR_TEXT.saveError);
+    }
+  }
+
+  async function handleDelete() {
+    if (!eventId) {
+      return;
+    }
+    if (!window.confirm("\u0423\u0434\u0430\u043b\u0438\u0442\u044c \u0441\u043e\u0431\u044b\u0442\u0438\u0435?")) {
+      return;
+    }
+    try {
+      await deleteEvent(Number(eventId), token);
+      navigate(`/workspaces/${workspace.id}`);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : EVENT_EDITOR_TEXT.deleteError);
     }
   }
 
@@ -207,6 +247,11 @@ export function EventEditorPage({ token, session }: { token: string; session: Se
             <button className="action-pill action-pill--ghost" type="button" onClick={() => navigate(`/workspaces/${workspace.id}`)}>
               {EVENT_EDITOR_TEXT.cancelButton}
             </button>
+            {eventId ? (
+              <button className="action-pill action-pill--danger" type="button" onClick={handleDelete}>
+                {EVENT_EDITOR_TEXT.deleteButton}
+              </button>
+            ) : null}
           </div>
         </form>
       )}

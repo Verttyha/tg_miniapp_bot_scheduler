@@ -55,6 +55,14 @@ export async function updateEvent(eventId: number, payload: Record<string, unkno
   }, token);
 }
 
+export async function deleteEvent(eventId: number, token: string): Promise<EventItem> {
+  return request<EventItem>(`/events/${eventId}`, { method: "DELETE" }, token);
+}
+
+export async function completeEvent(eventId: number, token: string): Promise<EventItem> {
+  return request<EventItem>(`/events/${eventId}/complete`, { method: "POST" }, token);
+}
+
 export async function getWorkspacePolls(workspaceId: number, token: string): Promise<Poll[]> {
   return request<Poll[]>(`/workspaces/${workspaceId}/polls`, undefined, token);
 }

@@ -34,3 +34,9 @@ def test_telegram_proxy_url_can_be_overridden():
     settings = Settings(_env_file=None, TELEGRAM_PROXY_URL="socks5://127.0.0.1:1080")
 
     assert settings.telegram_proxy_url == "socks5://127.0.0.1:1080"
+
+
+def test_telegram_request_timeout_can_be_overridden():
+    settings = Settings(_env_file=None, TELEGRAM_REQUEST_TIMEOUT_SECONDS=4.5)
+
+    assert settings.telegram_request_timeout_seconds == 4.5

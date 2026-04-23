@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,7 +22,7 @@ from scheduler_app.domain.models import (
     WorkspaceMember,
 )
 from scheduler_app.domain.schemas import AttendanceUpdateRequest, EventCreateRequest, EventUpdateRequest
-from scheduler_app.services.common import NotFoundError, ensure_admin, get_workspace_member
+from scheduler_app.services.common import ConflictError, NotFoundError, ensure_admin, get_workspace_member
 from scheduler_app.services.integrations import IntegrationService
 from scheduler_app.services.notifications import NotificationService
 
@@ -39,7 +40,10 @@ class EventService:
             raise NotFoundError("Workspace not found")
         result = await self.session.scalars(
             select(Event)
-            .where(Event.workspace_id == workspace_id)
+            .where(
+                Event.workspace_id == workspace_id,
+                Event.status != EventStatus.CANCELLED.value,
+            )
             .options(selectinload(Event.participants).selectinload(EventParticipant.user))
             .order_by(Event.start_at)
         )
@@ -96,10 +100,7 @@ class EventService:
         event = await self._load_event(event.id)
         await self._sync_event_to_connections(event, participants)
         await self.notification_service.rebuild_reminder_jobs(event)
-        await self.notification_service.send_to_users(
-            participants,
-            f"New event created: '{event.title}' at {event.start_at.isoformat()}",
-        )
+        await self.notification_service.send_to_users(participants, self._added_to_event_message(event))
         return await self._load_event(event.id)
 
     async def update_event(self, actor: User, event_id: int, payload: EventUpdateRequest) -> Event:
@@ -111,7 +112,13 @@ class EventService:
 
         original_participants = {participant.user_id: participant for participant in event.participants}
         removed_users: list[User] = []
+        added_users: list[User] = []
         kept_user_ids = set(original_participants)
+
+        next_start = payload.start_at or event.start_at
+        next_end = payload.end_at or event.end_at
+        if next_end <= next_start:
+            raise ConflictError("end_at must be greater than start_at")
 
         if payload.title is not None:
             event.title = payload.title
@@ -138,6 +145,7 @@ class EventService:
                     await self.session.delete(participant)
             for desired_user in desired:
                 if desired_user.id not in original_participants:
+                    added_users.append(desired_user)
                     event.participants.append(
                         EventParticipant(
                             user_id=desired_user.id,
@@ -147,12 +155,15 @@ class EventService:
             await self.session.flush()
 
         current_users = [workspace_members[user_id] for user_id in kept_user_ids]
-        await self._sync_event_to_connections(event, current_users, update_existing=True)
+        sync_users = current_users + added_users
+        await self._sync_event_to_connections(event, sync_users, update_existing=True)
         await self.notification_service.rebuild_reminder_jobs(event)
-        await self.notification_service.send_to_users(
-            current_users + removed_users,
-            f"Event updated: '{event.title}' now starts at {event.start_at.isoformat()}",
-        )
+        if current_users:
+            await self.notification_service.send_to_users(current_users, self._event_updated_message(event))
+        if added_users:
+            await self.notification_service.send_to_users(added_users, self._added_to_event_message(event))
+        if removed_users:
+            await self.notification_service.send_to_users(removed_users, self._removed_from_event_message(event))
         return await self._load_event(event.id)
 
     async def delete_event(self, actor: User, event_id: int) -> Event:
@@ -176,8 +187,27 @@ class EventService:
         event.status = EventStatus.CANCELLED.value
         for job in event.notification_jobs:
             await self.session.delete(job)
-        await self.notification_service.send_to_users(users, f"Event cancelled: '{event.title}'.")
+        await self.notification_service.send_to_users(users, self._event_cancelled_message(event))
         return event
+
+    async def complete_event(self, actor: User, event_id: int) -> Event:
+        event = await self._load_event(event_id)
+        membership = await get_workspace_member(self.session, event.workspace_id, actor.id)
+        if not membership:
+            raise NotFoundError("Event not found")
+        ensure_admin(membership)
+        if event.status == EventStatus.CANCELLED.value:
+            raise ConflictError("Cancelled event cannot be completed")
+        if event.status == EventStatus.COMPLETED.value:
+            return event
+
+        event.status = EventStatus.COMPLETED.value
+        users = [participant.user for participant in event.participants]
+        for job in event.notification_jobs:
+            await self.session.delete(job)
+        await self.notification_service.send_to_users(users, self._event_completed_message(event))
+        await self.session.flush()
+        return await self._load_event(event.id)
 
     async def mark_attendance(
         self,
@@ -300,8 +330,45 @@ class EventService:
                 selectinload(Event.participants).selectinload(EventParticipant.user),
                 selectinload(Event.mappings).selectinload(ExternalEventMapping.connection),
                 selectinload(Event.notification_jobs),
+                selectinload(Event.workspace),
             )
         )
         if not event:
             raise NotFoundError("Event not found")
         return event
+
+    def _event_updated_message(self, event: Event) -> str:
+        details = self._event_details(event)
+        return f"ОБНОВЛЕНИЕ события «{event.title}» из группы «{event.workspace.name}». Детали: {details}"
+
+    def _added_to_event_message(self, event: Event) -> str:
+        details = self._event_details(event)
+        return f"Вас добавили в событие «{event.title}» из группы «{event.workspace.name}». Детали: {details}"
+
+    def _removed_from_event_message(self, event: Event) -> str:
+        details = self._event_details(event)
+        return f"Вас удалили из события «{event.title}» из группы «{event.workspace.name}». Детали: {details}"
+
+    def _event_cancelled_message(self, event: Event) -> str:
+        details = self._event_details(event)
+        return f"ОТМЕНА события «{event.title}» из группы «{event.workspace.name}». Детали: {details}"
+
+    def _event_completed_message(self, event: Event) -> str:
+        details = self._event_details(event)
+        return f"ЗАВЕРШЕНИЕ события «{event.title}» из группы «{event.workspace.name}». Детали: {details}"
+
+    def _event_details(self, event: Event) -> str:
+        timezone_info = self._resolve_timezone(event.timezone_name)
+        start_at = self._ensure_utc(event.start_at).astimezone(timezone_info)
+        return f"«{start_at:%d.%m.%Y}» «{start_at:%H:%M}»"
+
+    def _resolve_timezone(self, timezone_name: str) -> ZoneInfo:
+        try:
+            return ZoneInfo(timezone_name)
+        except ZoneInfoNotFoundError:
+            return ZoneInfo("UTC")
+
+    def _ensure_utc(self, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)

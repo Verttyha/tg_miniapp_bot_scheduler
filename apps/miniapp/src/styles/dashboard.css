@@ -169,10 +169,26 @@
   font-weight: 800;
 }
 
+.panel-title--subsection {
+  font-size: 1.08rem;
+}
+
 .panel-subtitle {
   margin: 6px 0 0;
   font-size: 0.94rem;
   line-height: 1.5;
+}
+
+.panel-header--compact {
+  margin-bottom: 12px;
+}
+
+.panel-subsection {
+  display: grid;
+  gap: 12px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
 }
 
 .panel-badge {
@@ -195,9 +211,7 @@
 
 .event-card {
   display: grid;
-  grid-template-columns: 92px minmax(0, 1fr) auto;
-  gap: 14px;
-  align-items: center;
+  gap: 10px;
   padding: 18px;
   border-radius: 24px;
   border: 1px solid var(--line);
@@ -205,9 +219,63 @@
   transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
 }
 
+.event-card__main {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  color: inherit;
+  text-decoration: none;
+}
+
+.dashboard-event-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.dashboard-event-row .event-card {
+  height: 100%;
+}
+
+.dashboard-event-complete {
+  width: auto;
+  min-width: 126px;
+  min-height: 100%;
+  padding: 0 14px;
+  border-radius: 20px;
+  box-shadow: none;
+}
+
 .event-card--featured {
   background: linear-gradient(135deg, rgba(76, 178, 255, 0.15), rgba(255, 255, 255, 0.04));
   border-color: rgba(76, 178, 255, 0.24);
+}
+
+.event-card__participants-toggle {
+  min-height: 36px;
+  justify-self: start;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.event-card__participants-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0 0 0 18px;
+  color: var(--muted);
+}
+
+.event-card__participants-list li {
+  line-height: 1.4;
 }
 
 .event-card__time-block {
@@ -356,6 +424,12 @@
   opacity: 0.64;
 }
 
+.provider-card--disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .provider-card__dot {
   width: 12px;
   height: 12px;
@@ -363,12 +437,17 @@
   box-shadow: 0 0 16px currentColor;
 }
 
-.provider-card__dot--google {
+.provider-card__dot--active {
   color: #34d399;
   background: #34d399;
 }
 
-.provider-card__dot--yandex {
+.provider-card__dot--inactive {
   color: #fb7185;
   background: #fb7185;
+}
+
+.provider-card__dot--disabled {
+  color: #94a3b8;
+  background: #94a3b8;
 }

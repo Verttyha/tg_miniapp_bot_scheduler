@@ -1,6 +1,8 @@
+import { useId, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   formatEventDay,
+  getUserDisplayName,
   formatParticipantsLabel,
   formatTime,
   translateEventStatus
@@ -11,9 +13,22 @@ interface EventCardProps {
   event: EventItem;
   canManageWorkspace: boolean;
   featured?: boolean;
+  defaultParticipantsExpanded?: boolean;
 }
 
-export function EventCard({ event, canManageWorkspace, featured = false }: EventCardProps) {
+export function EventCard({
+  event,
+  canManageWorkspace,
+  featured = false,
+  defaultParticipantsExpanded = false,
+}: EventCardProps) {
+  const [showParticipants, setShowParticipants] = useState(defaultParticipantsExpanded);
+  const participantsId = useId();
+  const participantNames = useMemo(
+    () => event.participants.map((participant) => getUserDisplayName(participant.user)),
+    [event.participants]
+  );
+
   const content = (
     <>
       <div className="event-card__time-block">
@@ -32,14 +47,33 @@ export function EventCard({ event, canManageWorkspace, featured = false }: Event
     </>
   );
   const className = `event-card ${featured ? "event-card--featured" : ""}`.trim();
+  const toggleLabel = showParticipants ? "Скрыть участников" : "Показать участников";
 
-  if (canManageWorkspace) {
-    return (
-      <Link className={className} to={`/events/${event.id}/edit`}>
-        {content}
-      </Link>
-    );
-  }
-
-  return <article className={className}>{content}</article>;
+  return (
+    <article className={className}>
+      {canManageWorkspace ? (
+        <Link className="event-card__main" to={`/events/${event.id}/edit`}>
+          {content}
+        </Link>
+      ) : (
+        <div className="event-card__main">{content}</div>
+      )}
+      <button
+        aria-controls={participantsId}
+        aria-expanded={showParticipants}
+        className="event-card__participants-toggle"
+        onClick={() => setShowParticipants((value) => !value)}
+        type="button"
+      >
+        {toggleLabel}
+      </button>
+      {showParticipants ? (
+        <ul className="event-card__participants-list" id={participantsId}>
+          {participantNames.map((name, index) => (
+            <li key={`${name}-${index}`}>{name}</li>
+          ))}
+        </ul>
+      ) : null}
+    </article>
+  );
 }

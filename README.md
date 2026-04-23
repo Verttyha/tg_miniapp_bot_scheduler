@@ -58,6 +58,7 @@ Fill at least:
 - `BOT_USERNAME`
 - `BASE_URL=https://your-domain.example`
 - `TELEGRAM_PROXY_URL=socks5://127.0.0.1:1080` (when Telegram API is blocked from your server)
+- `TELEGRAM_REQUEST_TIMEOUT_SECONDS=6` (fail-fast timeout for Telegram API calls)
 
 Recommended server defaults:
 
@@ -66,6 +67,7 @@ APP_ENV=production
 ALLOW_INSECURE_DEV_AUTH=false
 SYNC_TELEGRAM_WEBHOOK_ON_STARTUP=true
 TELEGRAM_PROXY_URL=
+TELEGRAM_REQUEST_TIMEOUT_SECONDS=6
 ```
 
 ### 3. Build the Mini App

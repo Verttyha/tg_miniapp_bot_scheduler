@@ -16,6 +16,12 @@ from scheduler_app.domain.schemas import (
 )
 
 
+def ensure_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 def user_read(user: User) -> UserRead:
     return UserRead.model_validate(user)
 
@@ -25,7 +31,11 @@ def workspace_read(workspace: Workspace) -> WorkspaceRead:
 
 
 def event_read(event: Event) -> EventRead:
-    return EventRead.model_validate(event)
+    payload = EventRead.model_validate(event)
+    payload.start_at = ensure_utc(payload.start_at)
+    payload.end_at = ensure_utc(payload.end_at)
+    payload.created_at = ensure_utc(payload.created_at)
+    return payload
 
 
 def connection_read(
@@ -34,6 +44,8 @@ def connection_read(
     calendars: list[dict[str, str]] | None = None,
 ) -> CalendarConnectionRead:
     base = CalendarConnectionRead.model_validate(connection)
+    if base.token_expires_at:
+        base.token_expires_at = ensure_utc(base.token_expires_at)
     if calendars:
         base.calendars = [CalendarOptionRead(**item) for item in calendars]
     return base
@@ -52,8 +64,8 @@ def poll_read(
         PollOptionRead(
             id=option.id,
             label=option.label,
-            start_at=option.start_at,
-            end_at=option.end_at,
+            start_at=ensure_utc(option.start_at),
+            end_at=ensure_utc(option.end_at),
             vote_count=vote_totals.get(option.id, 0),
         )
         for option in poll.options
@@ -64,7 +76,7 @@ def poll_read(
         title=poll.title,
         description=poll.description,
         timezone_name=poll.timezone_name,
-        deadline_at=poll.deadline_at,
+        deadline_at=ensure_utc(poll.deadline_at),
         status=poll.status,
         selected_option_id=poll.selected_option_id,
         resulting_event_id=poll.resulting_event_id,

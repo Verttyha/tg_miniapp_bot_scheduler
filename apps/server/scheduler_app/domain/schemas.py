@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class UserRead(BaseModel):
@@ -111,6 +111,23 @@ class EventCreateRequest(BaseModel):
     timezone_name: str = "Europe/Moscow"
     participant_ids: list[int]
 
+    @field_validator("participant_ids")
+    @classmethod
+    def validate_participant_ids(cls, value: list[int]) -> list[int]:
+        if not value:
+            raise ValueError("At least one participant is required")
+        return value
+
+    @model_validator(mode="after")
+    def validate_time_range(self):
+        if self.start_at.tzinfo is None or self.end_at.tzinfo is None:
+            raise ValueError("start_at and end_at must include timezone")
+        if self.end_at <= self.start_at:
+            raise ValueError("end_at must be greater than start_at")
+        if not self.timezone_name.strip():
+            raise ValueError("timezone_name is required")
+        return self
+
 
 class EventUpdateRequest(BaseModel):
     title: str | None = None
@@ -120,6 +137,25 @@ class EventUpdateRequest(BaseModel):
     end_at: datetime | None = None
     timezone_name: str | None = None
     participant_ids: list[int] | None = None
+
+    @field_validator("participant_ids")
+    @classmethod
+    def validate_optional_participant_ids(cls, value: list[int] | None) -> list[int] | None:
+        if value is not None and not value:
+            raise ValueError("At least one participant is required")
+        return value
+
+    @model_validator(mode="after")
+    def validate_time_range(self):
+        if self.start_at is not None and self.start_at.tzinfo is None:
+            raise ValueError("start_at must include timezone")
+        if self.end_at is not None and self.end_at.tzinfo is None:
+            raise ValueError("end_at must include timezone")
+        if self.start_at is not None and self.end_at is not None and self.end_at <= self.start_at:
+            raise ValueError("end_at must be greater than start_at")
+        if self.timezone_name is not None and not self.timezone_name.strip():
+            raise ValueError("timezone_name is required")
+        return self
 
 
 class AttendanceRecordInput(BaseModel):
@@ -137,6 +173,14 @@ class PollOptionInput(BaseModel):
     start_at: datetime
     end_at: datetime
 
+    @model_validator(mode="after")
+    def validate_range(self):
+        if self.start_at.tzinfo is None or self.end_at.tzinfo is None:
+            raise ValueError("start_at and end_at must include timezone")
+        if self.end_at <= self.start_at:
+            raise ValueError("Poll option end_at must be greater than start_at")
+        return self
+
 
 class PollCreateRequest(BaseModel):
     title: str
@@ -145,6 +189,23 @@ class PollCreateRequest(BaseModel):
     deadline_at: datetime
     participant_ids: list[int]
     options: list[PollOptionInput]
+
+    @field_validator("participant_ids")
+    @classmethod
+    def validate_poll_participants(cls, value: list[int]) -> list[int]:
+        if not value:
+            raise ValueError("At least one participant is required")
+        return value
+
+    @model_validator(mode="after")
+    def validate_deadline(self):
+        if self.deadline_at.tzinfo is None:
+            raise ValueError("deadline_at must include timezone")
+        if not self.timezone_name.strip():
+            raise ValueError("timezone_name is required")
+        if not self.options:
+            raise ValueError("At least one option is required")
+        return self
 
 
 class PollOptionRead(BaseModel):

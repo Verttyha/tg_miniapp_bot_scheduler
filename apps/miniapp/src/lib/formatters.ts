@@ -20,6 +20,7 @@ const CONNECTION_STATUS = {
 const EVENT_STATUS = {
   scheduled: "\u0437\u0430\u043f\u043b\u0430\u043d\u0438\u0440\u043e\u0432\u0430\u043d\u043e",
   cancelled: "\u043e\u0442\u043c\u0435\u043d\u0435\u043d\u043e",
+  completed: "\u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u043e",
   draft: "\u0447\u0435\u0440\u043d\u043e\u0432\u0438\u043a"
 };
 
@@ -96,6 +97,8 @@ export function translateEventStatus(status: string) {
       return EVENT_STATUS.scheduled;
     case "cancelled":
       return EVENT_STATUS.cancelled;
+    case "completed":
+      return EVENT_STATUS.completed;
     case "draft":
       return EVENT_STATUS.draft;
     default:

@@ -11,7 +11,7 @@ from scheduler_app.domain.models import CalendarConnection, ConnectionStatus, Us
 from scheduler_app.domain.schemas import IntegrationUpdateRequest
 from scheduler_app.integrations.google import GoogleCalendarProvider
 from scheduler_app.integrations.yandex import YandexCalendarProvider
-from scheduler_app.services.common import NotFoundError, PermissionDeniedError
+from scheduler_app.services.common import NotFoundError, PermissionDeniedError, ServiceError
 
 
 class IntegrationService:
@@ -30,6 +30,8 @@ class IntegrationService:
         return self.providers[provider]
 
     async def build_connect_link(self, user: User, provider: str) -> str:
+        if provider == "google" and (not self.settings.google_client_id or not self.settings.google_client_secret):
+            raise ServiceError("Google integration is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.")
         state = build_oauth_state(user.id, provider, self.settings.app_secret)
         return await self.get_provider(provider).build_authorize_url(state)
 

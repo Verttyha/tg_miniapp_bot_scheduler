@@ -6,7 +6,7 @@ from scheduler_app.core.security import TokenCipher
 from scheduler_app.core.settings import Settings
 from scheduler_app.domain.models import User
 from scheduler_app.domain.schemas import AttendanceUpdateRequest, EventCreateRequest, EventRead, EventUpdateRequest
-from scheduler_app.services.common import NotFoundError, PermissionDeniedError
+from scheduler_app.services.common import ConflictError, NotFoundError, PermissionDeniedError
 from scheduler_app.services.events import EventService
 from scheduler_app.services.presenters import event_read
 
@@ -46,6 +46,8 @@ async def create_event(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except PermissionDeniedError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     await session.commit()
     return event_read(event)
 
@@ -82,6 +84,8 @@ async def update_event(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except PermissionDeniedError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     await session.commit()
     return event_read(event)
 
@@ -101,6 +105,27 @@ async def delete_event(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except PermissionDeniedError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    await session.commit()
+    return event_read(event)
+
+
+@router.post("/events/{event_id}/complete", response_model=EventRead)
+async def complete_event(
+    event_id: int,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+    cipher: TokenCipher = Depends(get_cipher),
+) -> EventRead:
+    service = EventService(session, settings, cipher)
+    try:
+        event = await service.complete_event(current_user, event_id)
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except PermissionDeniedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     await session.commit()
     return event_read(event)
 

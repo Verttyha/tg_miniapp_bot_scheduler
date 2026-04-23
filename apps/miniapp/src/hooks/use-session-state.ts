@@ -52,27 +52,38 @@ export function useSessionState() {
 
   useEffect(() => {
     let active = true;
+    async function bootstrapWithInitData(initData: string) {
+      const payload = await bootstrapSession(initData);
+      if (!active) {
+        return;
+      }
+      localStorage.setItem("scheduler.token", payload.access_token);
+      setToken(payload.access_token);
+      setSession(payload);
+      setError(null);
+    }
+
     (async () => {
       try {
         const hasTelegramWebApp = Boolean(window.Telegram?.WebApp);
         const initData = await initTelegramApp();
         if (initData) {
           if (!token) {
-            const payload = await bootstrapSession(initData);
-            if (!active) {
-              return;
-            }
-            localStorage.setItem("scheduler.token", payload.access_token);
-            setToken(payload.access_token);
-            setSession(payload);
+            await bootstrapWithInitData(initData);
             return;
           }
 
-          const current = await getCurrentSession(token);
-          if (!active) {
+          try {
+            const current = await getCurrentSession(token);
+            if (!active) {
+              return;
+            }
+            setSession({ access_token: token, user: current.user, workspaces: current.workspaces });
+            setError(null);
             return;
+          } catch {
+            await bootstrapWithInitData(initData);
           }
-          setSession({ access_token: token, user: current.user, workspaces: current.workspaces });
           return;
         }
 

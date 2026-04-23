@@ -105,10 +105,6 @@ def build_router(session_factory: async_sessionmaker, settings: Settings) -> Rou
                         text="Подключиться",
                         callback_data=GROUP_CONNECT_CALLBACK_DATA,
                     ),
-                    InlineKeyboardButton(
-                        text="Вступить",
-                        callback_data=GROUP_CONNECT_CALLBACK_DATA,
-                    ),
                 ]
             ]
         )
@@ -120,7 +116,7 @@ def build_router(session_factory: async_sessionmaker, settings: Settings) -> Rou
             intro = "Привет! Я помогу вести общий календарь этого чата."
         return (
             f"{intro}\n"
-            "Нажмите «Подключиться» или «Вступить», чтобы присоединиться к календарю."
+            "Нажмите «Подключиться», чтобы присоединиться к календарю."
         )
 
     def build_group_connected_text(workspace_name: str, *, is_owner: bool) -> str:
@@ -130,7 +126,7 @@ def build_router(session_factory: async_sessionmaker, settings: Settings) -> Rou
                 "Вы стали владельцем календаря и можете назначать администраторов через /admins в личке бота."
             )
         return (
-            f"Вы вступили в календарь чата «{workspace_name}». "
+            f"Вы подключились к календарю чата «{workspace_name}». "
             "Теперь события и голосования будут доступны в Mini App."
         )
 
@@ -268,7 +264,7 @@ def build_router(session_factory: async_sessionmaker, settings: Settings) -> Rou
             try:
                 await message.answer(
                     "Не удалось назначить владельца календаря автоматически. "
-                    "Нажмите кнопку «Подключиться» или «Вступить» ниже с обычного аккаунта администратора.",
+                    "Нажмите кнопку «Подключиться» ниже с обычного аккаунта администратора.",
                     reply_markup=build_group_connect_markup(),
                 )
             except TelegramAPIError:
@@ -427,6 +423,10 @@ def build_router(session_factory: async_sessionmaker, settings: Settings) -> Rou
 
     @router.message(Command("setup"), F.chat.type.in_({"group", "supergroup"}))
     async def setup_workspace(message: Message) -> None:
+        await ensure_group_workspace(message)
+
+    @router.message(Command("connect"), F.chat.type.in_({"group", "supergroup"}))
+    async def connect_workspace(message: Message) -> None:
         await ensure_group_workspace(message)
 
     @router.poll_answer()

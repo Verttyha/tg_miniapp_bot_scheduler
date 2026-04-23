@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import logging
 
 import httpx
 from sqlalchemy import select
@@ -9,6 +10,8 @@ from sqlalchemy.orm import selectinload
 
 from scheduler_app.core.settings import Settings
 from scheduler_app.domain.models import Event, NotificationJob, NotificationKind, NotificationStatus, User
+
+logger = logging.getLogger(__name__)
 
 
 def ensure_utc(value: datetime) -> datetime:
@@ -22,17 +25,42 @@ class NotificationService:
         self.session = session
         self.settings = settings
 
+    def _telegram_api_url(self, method: str) -> str:
+        return f"https://api.telegram.org/bot{self.settings.bot_token}/{method}"
+
+    def _telegram_client(self) -> httpx.AsyncClient:
+        timeout = self.settings.telegram_request_timeout_seconds
+        if self.settings.telegram_proxy_url:
+            try:
+                return httpx.AsyncClient(timeout=timeout, proxy=self.settings.telegram_proxy_url)
+            except (ImportError, RuntimeError) as exc:
+                logger.warning("Telegram proxy is configured but unavailable for httpx: %s", exc)
+        return httpx.AsyncClient(timeout=timeout)
+
+    def _can_send_telegram_messages(self) -> bool:
+        return bool(self.settings.bot_token) and not self.settings.bot_token.endswith(":CHANGE_ME")
+
     async def send_to_users(self, users: list[User], text: str) -> None:
-        if not self.settings.bot_token or self.settings.bot_token.endswith(":CHANGE_ME"):
+        if not self._can_send_telegram_messages():
             return
-        async with httpx.AsyncClient(timeout=20.0) as client:
+        async with self._telegram_client() as client:
             for user in users:
                 if not user.telegram_user_id:
                     continue
-                await client.post(
-                    f"https://api.telegram.org/bot{self.settings.bot_token}/sendMessage",
-                    json={"chat_id": user.telegram_user_id, "text": text},
-                )
+                try:
+                    response = await client.post(
+                        self._telegram_api_url("sendMessage"),
+                        json={"chat_id": user.telegram_user_id, "text": text},
+                    )
+                    if not response.is_success:
+                        logger.warning(
+                            "Failed to send Telegram notification to %s: %s %s",
+                            user.telegram_user_id,
+                            response.status_code,
+                            response.text,
+                        )
+                except httpx.HTTPError as exc:
+                    logger.warning("Telegram notification request failed for %s: %s", user.telegram_user_id, exc)
 
     async def rebuild_reminder_jobs(self, event: Event) -> None:
         due_at = ensure_utc(event.start_at) - timedelta(minutes=self.settings.reminder_minutes_before)
@@ -67,21 +95,22 @@ class NotificationService:
             )
             .options(selectinload(NotificationJob.user), selectinload(NotificationJob.event))
         )
-        async with httpx.AsyncClient(timeout=20.0) as client:
+        async with self._telegram_client() as client:
             for job in due_jobs:
-                if not job.user.telegram_user_id or self.settings.bot_token == "CHANGE_ME":
-                    job.status = NotificationStatus.FAILED.value
-                    job.error_message = "Bot token or user chat unavailable"
-                    continue
-                if self.settings.bot_token.endswith(":CHANGE_ME"):
+                if not job.user.telegram_user_id or not self._can_send_telegram_messages():
                     job.status = NotificationStatus.FAILED.value
                     job.error_message = "Bot token or user chat unavailable"
                     continue
                 message = self._render_job(job)
-                response = await client.post(
-                    f"https://api.telegram.org/bot{self.settings.bot_token}/sendMessage",
-                    json={"chat_id": job.user.telegram_user_id, "text": message},
-                )
+                try:
+                    response = await client.post(
+                        self._telegram_api_url("sendMessage"),
+                        json={"chat_id": job.user.telegram_user_id, "text": message},
+                    )
+                except httpx.HTTPError as exc:
+                    job.status = NotificationStatus.FAILED.value
+                    job.error_message = str(exc)
+                    continue
                 if response.is_success:
                     job.status = NotificationStatus.SENT.value
                     job.sent_at = datetime.now(timezone.utc)

@@ -5,6 +5,7 @@ import { ParticipantSelector } from "../components/forms/participant-selector";
 import { PollOptionFields, type PollOptionDraft } from "../components/forms/poll-option-fields";
 import { ScreenHeader } from "../components/layout/screen-header";
 import { LineField } from "../components/ui/line-field";
+import { buildIsoFromDateTimeLocal } from "../lib/date";
 import { isWorkspaceAdmin } from "../lib/workspace";
 import type { SessionPayload } from "../types";
 
@@ -15,6 +16,9 @@ const POLL_EDITOR_TEXT = {
     "\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u043d\u0435\u0441\u043a\u043e\u043b\u044c\u043a\u043e \u0432\u0430\u0440\u0438\u0430\u043d\u0442\u043e\u0432 \u0432\u0440\u0435\u043c\u0435\u043d\u0438, \u0430 \u043a\u043e\u043c\u0430\u043d\u0434\u0430 \u043f\u0440\u043e\u0433\u043e\u043b\u043e\u0441\u0443\u0435\u0442",
   adminOnly: "\u0421\u043e\u0437\u0434\u0430\u0432\u0430\u0442\u044c \u043e\u043f\u0440\u043e\u0441\u044b \u043c\u043e\u0433\u0443\u0442 \u0442\u043e\u043b\u044c\u043a\u043e \u0430\u0434\u043c\u0438\u043d\u0438\u0441\u0442\u0440\u0430\u0442\u043e\u0440\u044b \u0447\u0430\u0442\u0430.",
   createError: "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0441\u043e\u0437\u0434\u0430\u0442\u044c \u0433\u043e\u043b\u043e\u0441\u043e\u0432\u0430\u043d\u0438\u0435",
+  noParticipants: "\u041d\u0435\u043b\u044c\u0437\u044f \u0441\u043e\u0437\u0434\u0430\u0442\u044c \u043e\u043f\u0440\u043e\u0441 \u0431\u0435\u0437 \u0443\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u043e\u0432",
+  invalidDeadline: "\u0414\u0435\u0434\u043b\u0430\u0439\u043d \u0434\u043e\u043b\u0436\u0435\u043d \u0431\u044b\u0442\u044c \u0432 \u0431\u0443\u0434\u0443\u0449\u0435\u043c",
+  invalidOptionRange: "\u0412 \u043a\u0430\u0436\u0434\u043e\u043c \u0432\u0430\u0440\u0438\u0430\u043d\u0442\u0435 \u0432\u0440\u0435\u043c\u044f \u043e\u043a\u043e\u043d\u0447\u0430\u043d\u0438\u044f \u0434\u043e\u043b\u0436\u043d\u043e \u0431\u044b\u0442\u044c \u043f\u043e\u0437\u0436\u0435 \u0432\u0440\u0435\u043c\u0435\u043d\u0438 \u043d\u0430\u0447\u0430\u043b\u0430",
   titleLabel: "\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435",
   deadlineLabel: "\u0414\u0435\u0434\u043b\u0430\u0439\u043d",
   descriptionLabel: "\u041e\u043f\u0438\u0441\u0430\u043d\u0438\u0435",
@@ -62,7 +66,18 @@ export function PollEditorPage({ token, session }: { token: string; session: Ses
   }
 
   function toggleParticipant(userId: number) {
-    setSelectedIds((current) => (current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId]));
+    setSelectedIds((current) => {
+      if (!current.includes(userId)) {
+        setError(null);
+        return [...current, userId];
+      }
+      if (current.length === 1) {
+        setError(POLL_EDITOR_TEXT.noParticipants);
+        return current;
+      }
+      setError(null);
+      return current.filter((id) => id !== userId);
+    });
   }
 
   function addOption() {
@@ -77,20 +92,54 @@ export function PollEditorPage({ token, session }: { token: string; session: Ses
 
   async function handleSubmit(submitEvent: FormEvent<HTMLFormElement>) {
     submitEvent.preventDefault();
+    if (!selectedIds.length) {
+      setError(POLL_EDITOR_TEXT.noParticipants);
+      return;
+    }
+
+    let deadlineIso = "";
+    try {
+      deadlineIso = buildIsoFromDateTimeLocal(deadlineAt);
+    } catch (dateError) {
+      setError(dateError instanceof Error ? dateError.message : POLL_EDITOR_TEXT.createError);
+      return;
+    }
+
+    if (new Date(deadlineIso).getTime() <= Date.now()) {
+      setError(POLL_EDITOR_TEXT.invalidDeadline);
+      return;
+    }
+
+    const normalizedOptions: Array<{ label: string; start_at: string; end_at: string }> = [];
+    try {
+      for (const option of options) {
+        const startAt = buildIsoFromDateTimeLocal(option.start_at);
+        const endAt = buildIsoFromDateTimeLocal(option.end_at);
+        if (new Date(endAt).getTime() <= new Date(startAt).getTime()) {
+          setError(POLL_EDITOR_TEXT.invalidOptionRange);
+          return;
+        }
+        normalizedOptions.push({
+          label: option.label,
+          start_at: startAt,
+          end_at: endAt,
+        });
+      }
+    } catch (dateError) {
+      setError(dateError instanceof Error ? dateError.message : POLL_EDITOR_TEXT.createError);
+      return;
+    }
+
     try {
       await createPoll(
         workspace.id,
         {
           title,
           description,
-          deadline_at: new Date(deadlineAt).toISOString(),
+          deadline_at: deadlineIso,
           timezone_name: Intl.DateTimeFormat().resolvedOptions().timeZone,
           participant_ids: selectedIds,
-          options: options.map((option) => ({
-            label: option.label,
-            start_at: new Date(option.start_at).toISOString(),
-            end_at: new Date(option.end_at).toISOString()
-          }))
+          options: normalizedOptions
         },
         token
       );

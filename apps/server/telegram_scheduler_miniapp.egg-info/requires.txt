@@ -1,0 +1,17 @@
+aiohttp-socks<1.0.0,>=0.10.0
+aiogram<4.0.0,>=3.25.0
+aiosqlite<1.0.0,>=0.20.0
+caldav<3.0.0,>=2.1.1
+cryptography<46.0.0,>=44.0.0
+fastapi<1.0.0,>=0.128.0
+httpx[socks]<1.0.0,>=0.28.0
+icalendar<7.0.0,>=6.1.0
+pydantic-settings<3.0.0,>=2.10.0
+sqlalchemy<3.0.0,>=2.0.40
+uvicorn[standard]<1.0.0,>=0.35.0
+
+[dev]
+pytest<9.0.0,>=8.4.0
+pytest-asyncio<2.0.0,>=1.1.0
+pytest-cov<7.0.0,>=6.2.0
+respx<1.0.0,>=0.22.0

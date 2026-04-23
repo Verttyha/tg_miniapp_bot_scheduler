@@ -65,10 +65,17 @@
 
 .screen-header__back {
   justify-self: start;
-  padding: 8px 0;
-  color: var(--muted);
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line-strong);
+  background: rgba(76, 178, 255, 0.12);
+  color: var(--text);
   font-size: 0.96rem;
   font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .screen-header__eyebrow {

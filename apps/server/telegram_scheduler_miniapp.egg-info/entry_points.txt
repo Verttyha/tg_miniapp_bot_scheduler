@@ -1,0 +1,2 @@
+[console_scripts]
+telegram-scheduler = scheduler_app.main:run

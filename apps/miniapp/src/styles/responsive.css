@@ -47,8 +47,8 @@
     grid-template-columns: 1fr;
   }
 
-  .event-card,
-  .event-card--featured {
+  .event-card__main,
+  .event-card--featured .event-card__main {
     grid-template-columns: 1fr;
   }
 
@@ -56,6 +56,15 @@
     justify-items: start;
     grid-auto-flow: column;
     justify-content: start;
+  }
+
+  .dashboard-event-row {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-event-complete {
+    width: 100%;
+    min-height: 48px;
   }
 
   .provider-grid {
