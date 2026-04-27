@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 import logging
 import re
@@ -38,6 +39,7 @@ async def sync_telegram_webhook(bot: Bot, dispatcher: Dispatcher, settings: Sett
         await bot.set_my_commands(
             [
                 BotCommand(command="connect", description="Подключиться к календарю чата"),
+                BotCommand(command="join", description="Подключиться к календарю чата"),
                 BotCommand(command="setup", description="Подключить календарь чата"),
             ],
             scope=BotCommandScopeAllGroupChats(),
@@ -87,15 +89,52 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     dispatcher = Dispatcher()
     dispatcher.include_router(build_bot_router(session_factory, runtime_settings))
     scheduler = SchedulerRunner(session_factory, runtime_settings, cipher, bot)
+    telegram_update_tasks: set[asyncio.Task[None]] = set()
+    telegram_polling_task: asyncio.Task[None] | None = None
+
+    async def process_telegram_update(update: Update) -> None:
+        try:
+            await dispatcher.feed_update(bot, update)
+        except Exception:  # noqa: BLE001 - webhook delivery must stay acknowledged
+            logger.exception("Telegram update handling failed")
+        await scheduler.trigger()
+
+    def schedule_telegram_update(update: Update) -> None:
+        task = asyncio.create_task(process_telegram_update(update))
+        telegram_update_tasks.add(task)
+        task.add_done_callback(telegram_update_tasks.discard)
+
+    async def start_telegram_polling() -> asyncio.Task[None]:
+        try:
+            await bot.delete_webhook(drop_pending_updates=False)
+        except TelegramAPIError as exc:
+            logger.warning("Telegram webhook delete before polling failed: %s", exc)
+        task = asyncio.create_task(
+            dispatcher.start_polling(
+                bot,
+                allowed_updates=dispatcher.resolve_used_update_types(),
+                handle_signals=False,
+            )
+        )
+        logger.info("Telegram update polling started")
+        return task
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        nonlocal telegram_polling_task
         async with engine.begin() as connection:
             await connection.run_sync(Base.metadata.create_all)
         await sync_telegram_webhook(bot, dispatcher, runtime_settings)
+        if runtime_settings.telegram_updates_mode.lower() == "polling":
+            telegram_polling_task = await start_telegram_polling()
         try:
             yield
         finally:
+            if telegram_polling_task:
+                telegram_polling_task.cancel()
+                await asyncio.gather(telegram_polling_task, return_exceptions=True)
+            if telegram_update_tasks:
+                await asyncio.gather(*telegram_update_tasks, return_exceptions=True)
             await scheduler.stop()
             await bot.session.close()
             await engine.dispose()
@@ -118,7 +157,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def trigger_scheduler_on_activity(request: Request, call_next):
         path = request.url.path
         is_api_request = path.startswith(runtime_settings.api_prefix)
-        is_telegram_webhook = path.startswith("/webhooks/telegram")
         is_read_request = request.method in {"GET", "HEAD", "OPTIONS"}
 
         if is_api_request and is_read_request:
@@ -126,9 +164,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         response = await call_next(request)
 
-        if is_telegram_webhook or (
-            is_api_request and not is_read_request and not should_skip_post_trigger(path, request.method)
-        ):
+        if is_api_request and not is_read_request and not should_skip_post_trigger(path, request.method):
             await scheduler.trigger()
 
         return response
@@ -158,11 +194,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/webhooks/telegram")
     async def telegram_webhook(request: Request) -> dict[str, bool]:
-        update = Update.model_validate(await request.json())
         try:
-            await dispatcher.feed_update(bot, update)
-        except Exception:
-            logger.exception("Telegram update handling failed")
+            update = Update.model_validate(await request.json())
+        except Exception as exc:  # noqa: BLE001 - invalid webhook payloads should not be retried forever
+            logger.warning("Invalid Telegram webhook payload ignored: %s", exc)
+            return {"ok": True}
+        if runtime_settings.app_env == "test":
+            await process_telegram_update(update)
+        else:
+            schedule_telegram_update(update)
         return {"ok": True}
 
     @app.get("/app")

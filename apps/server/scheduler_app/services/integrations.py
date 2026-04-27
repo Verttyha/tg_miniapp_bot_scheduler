@@ -14,6 +14,11 @@ from scheduler_app.integrations.yandex import YandexCalendarProvider
 from scheduler_app.services.common import NotFoundError, PermissionDeniedError, ServiceError
 
 
+def as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
 class IntegrationService:
     def __init__(self, session: AsyncSession, settings: Settings, cipher: TokenCipher):
         self.session = session
@@ -103,7 +108,7 @@ class IntegrationService:
         return connection
 
     async def ensure_fresh_connection(self, connection: CalendarConnection) -> CalendarConnection:
-        if connection.token_expires_at and connection.token_expires_at <= datetime.now(timezone.utc):
+        if connection.token_expires_at and as_utc(connection.token_expires_at) <= datetime.now(timezone.utc):
             refreshed = await self.get_provider(connection.provider).refresh_tokens(connection)
             if refreshed:
                 connection.access_token_encrypted = self.cipher.encrypt(refreshed.access_token)

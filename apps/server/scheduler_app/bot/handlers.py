@@ -429,6 +429,10 @@ def build_router(session_factory: async_sessionmaker, settings: Settings) -> Rou
     async def connect_workspace(message: Message) -> None:
         await ensure_group_workspace(message)
 
+    @router.message(Command("join"), F.chat.type.in_({"group", "supergroup"}))
+    async def join_workspace(message: Message) -> None:
+        await ensure_group_workspace(message)
+
     @router.poll_answer()
     async def poll_answer_handler(answer: PollAnswer) -> None:
         if not answer.user:
