@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     bot_token: str = Field(default="123456:CHANGE_ME", alias="BOT_TOKEN")
     bot_username: str = Field(default="telegram_scheduler_bot", alias="BOT_USERNAME")
     telegram_proxy_url: str | None = Field(default=None, alias="TELEGRAM_PROXY_URL")
+    telegram_updates_mode: str = Field(default="webhook", alias="TELEGRAM_UPDATES_MODE")
     telegram_request_timeout_seconds: float = Field(default=6.0, alias="TELEGRAM_REQUEST_TIMEOUT_SECONDS")
     app_secret: str = Field(default="development-secret", alias="APP_SECRET")
     database_url: str | None = Field(default=None, alias="DATABASE_URL")
