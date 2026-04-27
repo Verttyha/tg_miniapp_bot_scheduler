@@ -56,6 +56,14 @@ def build_router(session_factory: async_sessionmaker, settings: Settings) -> Rou
             return f"@{user.username}"
         return f"User {user.id}"
 
+    def format_telegram_actor_name(user) -> str:
+        if user.username:
+            return f"@{user.username}"
+        full_name = " ".join(part for part in [user.first_name, user.last_name] if part).strip()
+        if full_name:
+            return full_name
+        return f"User {user.id}"
+
     def member_role_rank(member: WorkspaceMember) -> int:
         if member.role == WorkspaceRole.OWNER.value:
             return 0
@@ -119,14 +127,15 @@ def build_router(session_factory: async_sessionmaker, settings: Settings) -> Rou
             "Нажмите «Подключиться», чтобы присоединиться к календарю."
         )
 
-    def build_group_connected_text(workspace_name: str, *, is_owner: bool) -> str:
+    def build_group_connected_text(workspace_name: str, *, is_owner: bool, connector_name: str | None = None) -> str:
+        actor_label = connector_name or "пользователь"
         if is_owner:
             return (
-                f"Чат «{workspace_name}» подключён. "
-                "Вы стали владельцем календаря и можете назначать администраторов через /admins в личке бота."
+                f"Чат «{workspace_name}» подключил {actor_label}. "
+                "Этот пользователь стал владельцем календаря и может назначать администраторов через /admins в личке бота."
             )
         return (
-            f"Вы подключились к календарю чата «{workspace_name}». "
+            f"К календарю чата «{workspace_name}» подключился {actor_label}. "
             "Теперь события и голосования будут доступны в Mini App."
         )
 
@@ -280,7 +289,11 @@ def build_router(session_factory: async_sessionmaker, settings: Settings) -> Rou
 
         try:
             await message.answer(
-                build_group_connected_text(workspace.name, is_owner=is_owner)
+                build_group_connected_text(
+                    workspace.name,
+                    is_owner=is_owner,
+                    connector_name=format_telegram_actor_name(message.from_user),
+                )
             )
         except TelegramAPIError:
             return
@@ -412,7 +425,11 @@ def build_router(session_factory: async_sessionmaker, settings: Settings) -> Rou
         )
         try:
             await callback.message.answer(
-                build_group_connected_text(workspace.name, is_owner=is_owner)
+                build_group_connected_text(
+                    workspace.name,
+                    is_owner=is_owner,
+                    connector_name=format_telegram_actor_name(callback.from_user),
+                )
             )
         except TelegramAPIError:
             return
