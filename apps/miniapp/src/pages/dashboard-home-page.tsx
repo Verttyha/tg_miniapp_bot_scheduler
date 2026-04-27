@@ -1,15 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
-import { completeEvent, getWorkspaceEvents, getWorkspacePolls } from "../api";
+import { completeEvent, getIntegrations, getWorkspaceEvents, getWorkspacePolls } from "../api";
 import { EventCard } from "../components/dashboard/event-card";
+import { ProviderLinkCard } from "../components/dashboard/provider-link-card";
 import { WORKSPACE_STORAGE_KEY } from "../lib/constants";
 import {
+  capitalize,
   countPollVotes,
   formatCurrentDate,
-  formatDateTime
+  formatDateTime,
+  translateConnectionStatus
 } from "../lib/formatters";
 import { isWorkspaceAdmin, parseWorkspaceId } from "../lib/workspace";
-import type { EventItem, Poll, SessionPayload } from "../types";
+import type { CalendarConnection, EventItem, Poll, SessionPayload } from "../types";
+
+const PROVIDERS = ["google", "yandex"] as const;
 
 const DASHBOARD_TEXT = {
   loadWorkspaceError:
@@ -26,7 +31,7 @@ const DASHBOARD_TEXT = {
   createEvent: "\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0441\u043e\u0431\u044b\u0442\u0438\u0435",
   createPoll: "\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u043e\u043f\u0440\u043e\u0441",
   adminOnlyBanner:
-    "\u0421\u043e\u0437\u0434\u0430\u0432\u0430\u0442\u044c \u0441\u043e\u0431\u044b\u0442\u0438\u044f \u0438 \u043e\u043f\u0440\u043e\u0441\u044b \u043c\u043e\u0433\u0443\u0442 \u0442\u043e\u043b\u044c\u043a\u043e \u0430\u0434\u043c\u0438\u043d\u0438\u0441\u0442\u0440\u0430\u0442\u043e\u0440\u044b. \u0412\u044b \u043f\u043e-\u043f\u0440\u0435\u0436\u043d\u0435\u043c\u0443 \u0432\u0438\u0434\u0438\u0442\u0435 \u0440\u0430\u0441\u043f\u0438\u0441\u0430\u043d\u0438\u0435 \u0438 \u0433\u043e\u043b\u043e\u0441\u043e\u0432\u0430\u043d\u0438\u044f.",
+    "\u0421\u043e\u0437\u0434\u0430\u0432\u0430\u0442\u044c \u0441\u043e\u0431\u044b\u0442\u0438\u044f \u0438 \u043e\u043f\u0440\u043e\u0441\u044b \u043c\u043e\u0433\u0443\u0442 \u0442\u043e\u043b\u044c\u043a\u043e \u0430\u0434\u043c\u0438\u043d\u0438\u0441\u0442\u0440\u0430\u0442\u043e\u0440\u044b. \u0412\u044b \u043f\u043e-\u043f\u0440\u0435\u0436\u043d\u0435\u043c\u0443 \u0432\u0438\u0434\u0438\u0442\u0435 \u0440\u0430\u0441\u043f\u0438\u0441\u0430\u043d\u0438\u0435, \u0438\u043d\u0442\u0435\u0433\u0440\u0430\u0446\u0438\u0438 \u0438 \u0433\u043e\u043b\u043e\u0441\u043e\u0432\u0430\u043d\u0438\u044f.",
   stats: "\u0421\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043a\u0430",
   activePoll: "\u0410\u043a\u0442\u0438\u0432\u043d\u044b\u0439 \u043e\u043f\u0440\u043e\u0441",
   upcomingEventsTitle: "\u0411\u043b\u0438\u0436\u0430\u0439\u0448\u0438\u0435 \u0441\u043e\u0431\u044b\u0442\u0438\u044f",
@@ -52,7 +57,10 @@ const DASHBOARD_TEXT = {
   voted: "\u041f\u0440\u043e\u0433\u043e\u043b\u043e\u0441\u043e\u0432\u0430\u043b\u0438",
   votes: "\u0433\u043e\u043b\u043e\u0441\u043e\u0432",
   noOpenPolls:
-    "\u0421\u0435\u0439\u0447\u0430\u0441 \u043d\u0435\u0442 \u043e\u0442\u043a\u0440\u044b\u0442\u044b\u0445 \u0433\u043e\u043b\u043e\u0441\u043e\u0432\u0430\u043d\u0438\u0439 \u043f\u043e \u0432\u0440\u0435\u043c\u0435\u043d\u0438."
+    "\u0421\u0435\u0439\u0447\u0430\u0441 \u043d\u0435\u0442 \u043e\u0442\u043a\u0440\u044b\u0442\u044b\u0445 \u0433\u043e\u043b\u043e\u0441\u043e\u0432\u0430\u043d\u0438\u0439 \u043f\u043e \u0432\u0440\u0435\u043c\u0435\u043d\u0438.",
+  syncTitle: "\u0421\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0430\u0446\u0438\u0438",
+  syncSubtitle:
+    "\u0421\u0442\u0430\u0442\u0443\u0441 \u043a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u0435\u0439 \u0438 \u0431\u044b\u0441\u0442\u0440\u044b\u0439 \u043f\u0435\u0440\u0435\u0445\u043e\u0434 \u043a \u043d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0430\u043c \u043f\u043e\u0434\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u044f"
 };
 
 export function DashboardHomePage({ token, session }: { token: string; session: SessionPayload }) {
@@ -68,7 +76,9 @@ export function DashboardHomePage({ token, session }: { token: string; session: 
   });
   const [events, setEvents] = useState<EventItem[]>([]);
   const [polls, setPolls] = useState<Poll[]>([]);
+  const [connections, setConnections] = useState<CalendarConnection[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [completingEventIds, setCompletingEventIds] = useState<number[]>([]);
   const [error, setError] = useState<string | null>(null);
   const requestSeq = useRef(0);
@@ -98,13 +108,16 @@ export function DashboardHomePage({ token, session }: { token: string; session: 
     let active = true;
     if (!hasLoadedOnce.current) {
       setInitialLoading(true);
+    } else {
+      setRefreshing(true);
     }
 
     (async () => {
       try {
-        const [eventData, pollData] = await Promise.all([
+        const [eventData, pollData, connectionData] = await Promise.all([
           getWorkspaceEvents(workspaceDataId, token),
           getWorkspacePolls(workspaceDataId, token),
+          getIntegrations(token).catch(() => []),
         ]);
         if (!active) {
           return;
@@ -114,6 +127,7 @@ export function DashboardHomePage({ token, session }: { token: string; session: 
         }
         setEvents(eventData);
         setPolls(pollData);
+        setConnections(connectionData);
         setError(null);
       } catch (requestError) {
         if (active) {
@@ -123,6 +137,7 @@ export function DashboardHomePage({ token, session }: { token: string; session: 
         if (active) {
           hasLoadedOnce.current = true;
           setInitialLoading(false);
+          setRefreshing(false);
         }
       }
     })();
@@ -164,6 +179,8 @@ export function DashboardHomePage({ token, session }: { token: string; session: 
     .sort((left, right) => new Date(left.deadline_at).getTime() - new Date(right.deadline_at).getTime());
   const featuredPoll = openPolls[0] ?? null;
   const voteScale = featuredPoll ? Math.max(countPollVotes(featuredPoll), 1) : 1;
+  const googleConnection = connections.find((connection) => connection.provider === "google");
+  const activeConnections = googleConnection?.status === "active" ? 1 : 0;
 
   function handleWorkspaceChange(nextValue: string) {
     const nextWorkspaceId = Number(nextValue);
@@ -358,6 +375,45 @@ export function DashboardHomePage({ token, session }: { token: string; session: 
             ) : (
               <div className="empty-card">{DASHBOARD_TEXT.noOpenPolls}</div>
             )}
+          </section>
+
+          <section className="surface-panel">
+            <div className="panel-header">
+              <div>
+                <h2 className="panel-title">{DASHBOARD_TEXT.syncTitle}</h2>
+                <p className="panel-subtitle">{DASHBOARD_TEXT.syncSubtitle}</p>
+              </div>
+              <span className="panel-badge">{activeConnections}/1</span>
+            </div>
+
+            <div className="summary-list">
+              {PROVIDERS.map((provider) => {
+                const connection = connections.find((item) => item.provider === provider);
+                const isDisabled = provider === "yandex";
+                return (
+                  <div className="summary-item" key={provider}>
+                    <strong>{capitalize(provider)}</strong>
+                    <span>{isDisabled ? "\u041e\u0442\u043a\u043b\u044e\u0447\u0435\u043d\u043e" : translateConnectionStatus(connection?.status ?? "pending")}</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="provider-grid provider-grid--dashboard">
+              {PROVIDERS.map((provider) => {
+                const connection = connections.find((item) => item.provider === provider);
+                return (
+                  <ProviderLinkCard
+                    isActive={provider === "google" && connection?.status === "active"}
+                    isDisabled={provider === "yandex"}
+                    key={provider}
+                    provider={provider}
+                    to="/integrations"
+                  />
+                );
+              })}
+            </div>
+            {refreshing ? <div className="status-banner status-banner--muted">\u041e\u0431\u043d\u043e\u0432\u043b\u044f\u044e \u0434\u0430\u043d\u043d\u044b\u0435...</div> : null}
           </section>
         </div>
       </div>
