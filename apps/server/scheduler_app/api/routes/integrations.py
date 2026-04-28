@@ -1,3 +1,6 @@
+import html
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,6 +17,30 @@ from scheduler_app.services.presenters import connection_read
 
 router = APIRouter(prefix="/integrations")
 oauth_router = APIRouter()
+
+
+def oauth_success_response(settings: Settings, provider: str, account_email: str | None) -> HTMLResponse:
+    target = f"{settings.base_url.rstrip('/')}/app/integrations?connected={provider}"
+    title = html.escape(f"{provider.capitalize()} Calendar connected")
+    account = html.escape(account_email or "Account")
+    target_attr = html.escape(target, quote=True)
+    target_script = json.dumps(target)
+    return HTMLResponse(
+        f"""<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{title}</title>
+    <script>window.location.replace({target_script});</script>
+  </head>
+  <body>
+    <h1>{title}</h1>
+    <p>{account} is ready.</p>
+    <p><a href="{target_attr}">Return to app</a></p>
+  </body>
+</html>"""
+    )
 
 
 @router.get("", response_model=list[CalendarConnectionRead])
@@ -87,9 +114,7 @@ async def google_callback(
         connection = await service.handle_callback("google", code, state)
     except (SecurityError, PermissionDeniedError, NotFoundError) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    return HTMLResponse(
-        f"<html><body><h1>Google Calendar connected</h1><p>{connection.account_email or 'Account'} is ready.</p></body></html>"
-    )
+    return oauth_success_response(settings, "google", connection.account_email)
 
 
 @oauth_router.get("/oauth/yandex/callback", response_class=HTMLResponse)
@@ -105,6 +130,4 @@ async def yandex_callback(
         connection = await service.handle_callback("yandex", code, state)
     except (SecurityError, PermissionDeniedError, NotFoundError) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    return HTMLResponse(
-        f"<html><body><h1>Yandex Calendar connected</h1><p>{connection.account_email or 'Account'} is ready.</p></body></html>"
-    )
+    return oauth_success_response(settings, "yandex", connection.account_email)

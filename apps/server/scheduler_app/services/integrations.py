@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from scheduler_app.core.security import TokenCipher, build_oauth_state, read_oauth_state
+from scheduler_app.core.security import SecurityError, TokenCipher, build_oauth_state, read_oauth_state
 from scheduler_app.core.settings import Settings
 from scheduler_app.domain.models import CalendarConnection, ConnectionStatus, User
 from scheduler_app.domain.schemas import IntegrationUpdateRequest
@@ -18,6 +19,7 @@ def as_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc)
     return value.astimezone(timezone.utc)
+
 
 class IntegrationService:
     def __init__(self, session: AsyncSession, settings: Settings, cipher: TokenCipher):
@@ -61,7 +63,8 @@ class IntegrationService:
         connection.status = ConnectionStatus.ACTIVE.value
         connection.account_email = tokens.account_email
         connection.access_token_encrypted = self.cipher.encrypt(tokens.access_token)
-        connection.refresh_token_encrypted = self.cipher.encrypt(tokens.refresh_token)
+        if tokens.refresh_token:
+            connection.refresh_token_encrypted = self.cipher.encrypt(tokens.refresh_token)
         connection.token_expires_at = tokens.expires_at
         connection.provider_metadata = tokens.provider_metadata
         await self.session.flush()
@@ -82,8 +85,15 @@ class IntegrationService:
         for connection in records:
             calendars = []
             if connection.status == ConnectionStatus.ACTIVE.value:
-                calendars = await self.get_provider(connection.provider).list_calendars(connection)
+                try:
+                    await self.ensure_fresh_connection(connection)
+                    if connection.status == ConnectionStatus.ACTIVE.value:
+                        calendars = await self.get_provider(connection.provider).list_calendars(connection)
+                except (httpx.HTTPError, SecurityError):
+                    connection.status = ConnectionStatus.ERROR.value
+                    await self.session.flush()
             result.append((connection, calendars))
+        await self.session.commit()
         return result
 
     async def update_connection(
@@ -109,10 +119,16 @@ class IntegrationService:
 
     async def ensure_fresh_connection(self, connection: CalendarConnection) -> CalendarConnection:
         if connection.token_expires_at and as_utc(connection.token_expires_at) <= datetime.now(timezone.utc):
-            refreshed = await self.get_provider(connection.provider).refresh_tokens(connection)
+            try:
+                refreshed = await self.get_provider(connection.provider).refresh_tokens(connection)
+            except (httpx.HTTPError, SecurityError):
+                connection.status = ConnectionStatus.ERROR.value
+                await self.session.flush()
+                return connection
             if refreshed:
                 connection.access_token_encrypted = self.cipher.encrypt(refreshed.access_token)
-                connection.refresh_token_encrypted = self.cipher.encrypt(refreshed.refresh_token)
+                if refreshed.refresh_token:
+                    connection.refresh_token_encrypted = self.cipher.encrypt(refreshed.refresh_token)
                 connection.token_expires_at = refreshed.expires_at
                 connection.account_email = refreshed.account_email or connection.account_email
                 connection.provider_metadata = refreshed.provider_metadata or connection.provider_metadata

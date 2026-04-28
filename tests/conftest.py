@@ -37,6 +37,8 @@ def settings(tmp_path) -> Settings:
         APP_SECRET="test-secret",
         BOT_TOKEN="123456:TESTTOKEN",
         BOT_USERNAME="test_scheduler_bot",
+        TELEGRAM_PROXY_URL="",
+        TELEGRAM_UPDATES_MODE="webhook",
         ALLOW_INSECURE_DEV_AUTH=False,
         DATABASE_URL=f"sqlite+aiosqlite:///{(tmp_path / 'test.db').as_posix()}",
         SQLITE_PATH=str(tmp_path / "unused.db"),

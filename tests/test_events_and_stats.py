@@ -2,6 +2,12 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import select
+
+from scheduler_app.domain.models import CalendarConnection, ConnectionStatus, User
+from scheduler_app.integrations.base import ProviderTokens
+from scheduler_app.integrations.google import GoogleCalendarProvider
+from scheduler_app.services.integrations import IntegrationService
 from tests.conftest import authenticate, future_iso, seed_workspace
 
 
@@ -202,3 +208,66 @@ async def test_complete_event_marks_status_and_keeps_event_in_list(client, app, 
     list_response.raise_for_status()
     statuses = {item["id"]: item["status"] for item in list_response.json()}
     assert statuses[event_id] == "completed"
+
+
+async def test_calendar_connection_accepts_naive_token_expiry(client, app, settings):
+    await authenticate(client, settings, 111113, "calendar-owner")
+
+    async with app.state.session_factory() as session:
+        user = await session.scalar(select(User).where(User.telegram_user_id == 111113))
+        connection = CalendarConnection(
+            user_id=user.id,
+            provider="google",
+            status=ConnectionStatus.ACTIVE.value,
+            token_expires_at=datetime.now() + timedelta(hours=1),
+        )
+        session.add(connection)
+        await session.flush()
+
+        service = IntegrationService(session, settings, app.state.cipher)
+        await service.ensure_fresh_connection(connection)
+
+
+async def test_integrations_list_refreshes_expired_google_token(client, app, settings, monkeypatch):
+    owner = await authenticate(client, settings, 111114, "calendar-refresh")
+    refreshed_until = datetime.now(timezone.utc) + timedelta(hours=1)
+
+    async def fake_refresh(self, connection):
+        return ProviderTokens(
+            access_token="fresh-access",
+            refresh_token="existing-refresh",
+            expires_at=refreshed_until,
+            account_email="calendar@example.com",
+        )
+
+    async def fake_list_calendars(self, connection):
+        assert app.state.cipher.decrypt(connection.access_token_encrypted) == "fresh-access"
+        return [{"id": "primary", "name": "Primary"}]
+
+    monkeypatch.setattr(GoogleCalendarProvider, "refresh_tokens", fake_refresh)
+    monkeypatch.setattr(GoogleCalendarProvider, "list_calendars", fake_list_calendars)
+
+    async with app.state.session_factory() as session:
+        user = await session.scalar(select(User).where(User.telegram_user_id == 111114))
+        session.add(
+            CalendarConnection(
+                user_id=user.id,
+                provider="google",
+                status=ConnectionStatus.ACTIVE.value,
+                account_email="calendar@example.com",
+                access_token_encrypted=app.state.cipher.encrypt("expired-access"),
+                refresh_token_encrypted=app.state.cipher.encrypt("existing-refresh"),
+                token_expires_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+            )
+        )
+        await session.commit()
+
+    response = await client.get(
+        "/api/integrations",
+        headers={"Authorization": f"Bearer {owner['access_token']}"},
+    )
+
+    response.raise_for_status()
+    [connection] = response.json()
+    assert connection["status"] == "active"
+    assert connection["calendars"] == [{"id": "primary", "name": "Primary"}]
