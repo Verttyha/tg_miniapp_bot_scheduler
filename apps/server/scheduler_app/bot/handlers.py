@@ -12,7 +12,8 @@ from scheduler_app.bot.service import ensure_telegram_user
 from scheduler_app.core.security import TokenCipher
 from scheduler_app.core.settings import Settings
 from scheduler_app.domain.models import Workspace, WorkspaceMember, WorkspaceRole
-from scheduler_app.services.common import ConflictError, NotFoundError, PermissionDeniedError
+from scheduler_app.services.common import ConflictError, NotFoundError, PermissionDeniedError, ServiceError
+from scheduler_app.services.integrations import IntegrationService
 from scheduler_app.services.polls import PollService
 from scheduler_app.services.workspaces import WorkspaceService
 
@@ -80,7 +81,7 @@ def build_router(session_factory: async_sessionmaker, settings: Settings) -> Rou
             ),
         )
 
-    def build_start_markup(bot_username: str | None) -> InlineKeyboardMarkup:
+    def build_start_markup(bot_username: str | None, google_auth_url: str | None = None) -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(
             inline_keyboard=[
                 [
@@ -102,6 +103,11 @@ def build_router(session_factory: async_sessionmaker, settings: Settings) -> Rou
                     else []
                 ),
                 [InlineKeyboardButton(text="Админы чатов", callback_data="admins:menu")],
+                *(
+                    [[InlineKeyboardButton(text="Подключить Google", url=google_auth_url)]]
+                    if google_auth_url
+                    else []
+                ),
             ]
         )
 
@@ -302,8 +308,13 @@ def build_router(session_factory: async_sessionmaker, settings: Settings) -> Rou
     async def start_handler(message: Message) -> None:
         if not message.from_user:
             return
+        google_auth_url = None
         async with session_factory() as session:
-            await ensure_telegram_user(session, message.from_user)
+            user = await ensure_telegram_user(session, message.from_user)
+            try:
+                google_auth_url = await IntegrationService(session, settings, cipher).build_connect_link(user, "google")
+            except ServiceError:
+                google_auth_url = None
             await session.commit()
         bot_username = await resolve_bot_username(message)
         try:
@@ -311,7 +322,7 @@ def build_router(session_factory: async_sessionmaker, settings: Settings) -> Rou
                 "Открой календарь, чтобы подключить календари и управлять общим расписанием. "
                 "Если нужен календарь для группы, добавь бота в чат — первый подключивший участник "
                 "станет владельцем и сможет назначать администраторов через /admins.",
-                reply_markup=build_start_markup(bot_username),
+                reply_markup=build_start_markup(bot_username, google_auth_url),
             )
         except TelegramAPIError:
             return

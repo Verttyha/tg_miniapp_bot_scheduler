@@ -62,7 +62,7 @@ export function IntegrationsPage({ token }: { token: string }) {
     }
     try {
       const payload = await connectProvider(provider, token);
-      window.location.assign(payload.authorize_url);
+      window.open(payload.authorize_url, "_blank", "noopener,noreferrer");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : INTEGRATIONS_TEXT.connectError);
     }

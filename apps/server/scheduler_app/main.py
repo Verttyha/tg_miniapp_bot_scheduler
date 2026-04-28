@@ -127,6 +127,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         await sync_telegram_webhook(bot, dispatcher, runtime_settings)
         if runtime_settings.telegram_updates_mode.lower() == "polling":
             telegram_polling_task = await start_telegram_polling()
+        scheduler.start()
         try:
             yield
         finally:

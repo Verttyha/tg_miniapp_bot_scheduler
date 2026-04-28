@@ -24,6 +24,12 @@ from scheduler_app.services.notifications import NotificationService
 logger = logging.getLogger(__name__)
 
 
+def ensure_aware_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 class PollService:
     def __init__(
         self,
@@ -232,8 +238,8 @@ class PollService:
         payload = EventCreateRequest(
             title=poll.title,
             description=poll.description,
-            start_at=option.start_at,
-            end_at=option.end_at,
+            start_at=ensure_aware_utc(option.start_at),
+            end_at=ensure_aware_utc(option.end_at),
             timezone_name=poll.timezone_name,
             participant_ids=poll.participant_ids,
         )
@@ -308,7 +314,11 @@ class PollService:
                 chat_id=chat_poll.telegram_chat_id,
                 message_id=chat_poll.telegram_message_id,
             )
-        except TelegramAPIError:
+        except TelegramAPIError as exc:
+            if "poll has already been closed" in str(exc).lower():
+                chat_poll.closed_at = datetime.now(timezone.utc)
+                await self.session.flush()
+                return
             if raise_on_error:
                 raise
             logger.exception("Failed to close Telegram chat poll for poll %s", poll.id)
@@ -370,8 +380,8 @@ class PollService:
 
     def _build_option_label(self, poll: Poll, option: PollOption) -> str:
         timezone_info = self._resolve_timezone(poll.timezone_name)
-        start_at = option.start_at.astimezone(timezone_info)
-        end_at = option.end_at.astimezone(timezone_info)
+        start_at = ensure_aware_utc(option.start_at).astimezone(timezone_info)
+        end_at = ensure_aware_utc(option.end_at).astimezone(timezone_info)
         timing = f"{start_at:%d.%m %H:%M}-{end_at:%H:%M}"
         prefix = f"{option.label.strip()} " if option.label and option.label.strip() else ""
         return f"{prefix}{timing}"[:100]
