@@ -9,7 +9,6 @@ apps/server/scheduler_app/api/routes/auth.py
 apps/server/scheduler_app/api/routes/events.py
 apps/server/scheduler_app/api/routes/integrations.py
 apps/server/scheduler_app/api/routes/polls.py
-apps/server/scheduler_app/api/routes/stats.py
 apps/server/scheduler_app/api/routes/workspaces.py
 apps/server/scheduler_app/bot/__init__.py
 apps/server/scheduler_app/bot/handlers.py
@@ -35,7 +34,6 @@ apps/server/scheduler_app/services/notifications.py
 apps/server/scheduler_app/services/polls.py
 apps/server/scheduler_app/services/presenters.py
 apps/server/scheduler_app/services/scheduler.py
-apps/server/scheduler_app/services/stats.py
 apps/server/scheduler_app/services/workspaces.py
 apps/server/telegram_scheduler_miniapp.egg-info/PKG-INFO
 apps/server/telegram_scheduler_miniapp.egg-info/SOURCES.txt
@@ -44,7 +42,7 @@ apps/server/telegram_scheduler_miniapp.egg-info/entry_points.txt
 apps/server/telegram_scheduler_miniapp.egg-info/requires.txt
 apps/server/telegram_scheduler_miniapp.egg-info/top_level.txt
 tests/test_auth_and_webhook.py
-tests/test_events_and_stats.py
+tests/test_events.py
 tests/test_scheduler_and_polls.py
 tests/test_settings.py
 tests/test_startup_webhook_sync.py

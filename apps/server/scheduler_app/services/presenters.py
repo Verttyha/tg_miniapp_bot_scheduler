@@ -9,8 +9,6 @@ from scheduler_app.domain.schemas import (
     EventRead,
     PollOptionRead,
     PollRead,
-    StatsEntryRead,
-    StatsSummaryRead,
     UserRead,
     WorkspaceRead,
 )
@@ -85,12 +83,4 @@ def poll_read(
         vote_totals=vote_totals,
         user_vote_option_id=user_vote_option_id,
         has_chat_poll=poll.telegram_chat_poll is not None,
-    )
-
-
-def stats_summary(workspace_id: int, entries: list[StatsEntryRead]) -> StatsSummaryRead:
-    return StatsSummaryRead(
-        workspace_id=workspace_id,
-        generated_at=datetime.now(timezone.utc),
-        entries=entries,
     )

@@ -6,7 +6,6 @@
 .status-banner,
 .integration-card,
 .option-card,
-.stats-card,
 .vote-card,
 .field-stack,
 .dashboard-shortcut,
@@ -25,7 +24,6 @@
 .status-banner,
 .integration-card,
 .option-card,
-.stats-card,
 .vote-card {
   border-radius: 28px;
 }
@@ -37,7 +35,6 @@
 .editor-form,
 .vote-list,
 .integrations-list,
-.stats-list,
 .options-list {
   display: grid;
   gap: 14px;
@@ -48,7 +45,6 @@
 .status-banner,
 .integration-card,
 .option-card,
-.stats-card,
 .vote-card {
   padding: 16px 18px;
 }
@@ -56,7 +52,6 @@
 .notice,
 .status-banner,
 .integration-card__header p,
-.stats-card p,
 .vote-card span {
   color: var(--muted);
 }
@@ -169,16 +164,6 @@
   color: var(--warning);
 }
 
-.stats-card__header {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
-  font-size: 1rem;
-  font-weight: 700;
-}
-
-.stats-card__bar,
 .poll-option__bar,
 .progress-track {
   overflow: hidden;
@@ -187,11 +172,6 @@
   background: rgba(255, 255, 255, 0.08);
 }
 
-.stats-card__bar {
-  margin: 14px 0 12px;
-}
-
-.stats-card__fill,
 .poll-option__fill,
 .progress-fill {
   height: 100%;

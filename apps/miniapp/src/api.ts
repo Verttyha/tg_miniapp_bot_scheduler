@@ -1,4 +1,4 @@
-import type { CalendarConnection, EventItem, Poll, SessionPayload, StatsSummary, Workspace } from "./types";
+import type { CalendarConnection, EventItem, Poll, SessionPayload, Workspace } from "./types";
 
 const API_BASE = "/api";
 
@@ -105,8 +105,4 @@ export async function updateIntegration(connectionId: number, payload: Record<st
     method: "PATCH",
     body: JSON.stringify(payload)
   }, token);
-}
-
-export async function getWorkspaceStats(workspaceId: number, token: string): Promise<StatsSummary> {
-  return request<StatsSummary>(`/workspaces/${workspaceId}/stats`, undefined, token);
 }

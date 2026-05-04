@@ -243,17 +243,3 @@ class PollRead(BaseModel):
     vote_totals: dict[int, int] = Field(default_factory=dict)
     user_vote_option_id: int | None = None
     has_chat_poll: bool = False
-
-
-class StatsEntryRead(BaseModel):
-    user: UserRead
-    attended: int
-    missed: int
-    invited: int
-    attendance_rate: float
-
-
-class StatsSummaryRead(BaseModel):
-    workspace_id: int
-    generated_at: datetime
-    entries: list[StatsEntryRead]

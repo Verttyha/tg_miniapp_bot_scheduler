@@ -86,20 +86,6 @@ export interface CalendarConnection {
   calendars: CalendarOption[];
 }
 
-export interface StatsEntry {
-  user: User;
-  attended: number;
-  missed: number;
-  invited: number;
-  attendance_rate: number;
-}
-
-export interface StatsSummary {
-  workspace_id: number;
-  generated_at: string;
-  entries: StatsEntry[];
-}
-
 export interface SessionPayload {
   access_token: string;
   user: User;

@@ -11,7 +11,7 @@ from scheduler_app.services.integrations import IntegrationService
 from tests.conftest import authenticate, future_iso, seed_workspace
 
 
-async def test_event_creation_and_stats(client, app, settings, telegram_mock):
+async def test_event_creation_and_attendance_update(client, app, settings, telegram_mock):
     owner = await authenticate(client, settings, 111101, "owner")
     participant = await authenticate(client, settings, 111102, "member")
     seeded = await seed_workspace(app, 111101, 111102)
@@ -44,16 +44,14 @@ async def test_event_creation_and_stats(client, app, settings, telegram_mock):
     )
     attendance_response.raise_for_status()
 
-    stats_response = await client.get(
-        f"/api/workspaces/{seeded['workspace_id']}/stats",
+    event_response = await client.get(
+        f"/api/events/{event_id}",
         headers={"Authorization": f"Bearer {participant['access_token']}"},
     )
-    stats_response.raise_for_status()
-    entries = stats_response.json()["entries"]
+    event_response.raise_for_status()
+    participants = event_response.json()["participants"]
 
-    assert len(entries) == 2
-    assert any(entry["attended"] == 1 for entry in entries)
-    assert any(entry["missed"] == 1 for entry in entries)
+    assert {participant["attendance_status"] for participant in participants} == {"present", "absent"}
 
 
 async def test_event_creation_requires_at_least_one_participant(client, app, settings, telegram_mock):

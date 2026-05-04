@@ -7,7 +7,6 @@ import { EventEditorPage } from "./pages/event-editor-page";
 import { IntegrationsPage } from "./pages/integrations-page";
 import { PollEditorPage } from "./pages/poll-editor-page";
 import { PollPage } from "./pages/poll-page";
-import { StatsPage } from "./pages/stats-page";
 
 const LAUNCH_EYEBROW = "\u0417\u0430\u043f\u0443\u0441\u043a";
 const LAUNCH_MESSAGE = "\u041f\u043e\u0434\u043a\u043b\u044e\u0447\u0430\u044e \u043c\u0438\u043d\u0438-\u043f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u0438\u0435 \u043a Telegram...";
@@ -50,7 +49,6 @@ export function App() {
         <Route path="/events/:eventId/edit" element={<EventEditorPage token={token} session={session} />} />
         <Route path="/workspaces/:workspaceId/polls/new" element={<PollEditorPage token={token} session={session} />} />
         <Route path="/polls/:pollId" element={<PollPage token={token} session={session} />} />
-        <Route path="/workspaces/:workspaceId/stats" element={<StatsPage token={token} session={session} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AppShell>
