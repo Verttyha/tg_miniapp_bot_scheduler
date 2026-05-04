@@ -37,7 +37,7 @@ class EventService:
     async def list_events(self, user: User, workspace_id: int) -> list[Event]:
         membership = await get_workspace_member(self.session, workspace_id, user.id)
         if not membership:
-            raise NotFoundError("Workspace not found")
+            raise NotFoundError("Рабочее пространство не найдено")
         result = await self.session.scalars(
             select(Event)
             .where(
@@ -53,7 +53,7 @@ class EventService:
         event = await self._load_event(event_id)
         membership = await get_workspace_member(self.session, event.workspace_id, user.id)
         if not membership:
-            raise NotFoundError("Event not found")
+            raise NotFoundError("Событие не найдено")
         return event
 
     async def create_event(
@@ -67,7 +67,7 @@ class EventService:
     ) -> Event:
         membership = await get_workspace_member(self.session, workspace_id, actor.id)
         if not membership:
-            raise NotFoundError("Workspace not found")
+            raise NotFoundError("Рабочее пространство не найдено")
         ensure_admin(membership)
         workspace_members = await self._workspace_members_map(workspace_id)
         participants = self._resolve_participants(workspace_members, payload.participant_ids)
@@ -107,7 +107,7 @@ class EventService:
         event = await self._load_event(event_id)
         membership = await get_workspace_member(self.session, event.workspace_id, actor.id)
         if not membership:
-            raise NotFoundError("Event not found")
+            raise NotFoundError("Событие не найдено")
         ensure_admin(membership)
 
         original_participants = {participant.user_id: participant for participant in event.participants}
@@ -118,7 +118,7 @@ class EventService:
         next_start = payload.start_at or event.start_at
         next_end = payload.end_at or event.end_at
         if next_end <= next_start:
-            raise ConflictError("end_at must be greater than start_at")
+            raise ConflictError("Время окончания должно быть позже времени начала")
 
         if payload.title is not None:
             event.title = payload.title
@@ -170,7 +170,7 @@ class EventService:
         event = await self._load_event(event_id)
         membership = await get_workspace_member(self.session, event.workspace_id, actor.id)
         if not membership:
-            raise NotFoundError("Event not found")
+            raise NotFoundError("Событие не найдено")
         ensure_admin(membership)
 
         users = [participant.user for participant in event.participants]
@@ -194,10 +194,10 @@ class EventService:
         event = await self._load_event(event_id)
         membership = await get_workspace_member(self.session, event.workspace_id, actor.id)
         if not membership:
-            raise NotFoundError("Event not found")
+            raise NotFoundError("Событие не найдено")
         ensure_admin(membership)
         if event.status == EventStatus.CANCELLED.value:
-            raise ConflictError("Cancelled event cannot be completed")
+            raise ConflictError("Отмененное событие нельзя завершить")
         if event.status == EventStatus.COMPLETED.value:
             return event
 
@@ -218,7 +218,7 @@ class EventService:
         event = await self._load_event(event_id)
         membership = await get_workspace_member(self.session, event.workspace_id, actor.id)
         if not membership:
-            raise NotFoundError("Event not found")
+            raise NotFoundError("Событие не найдено")
         ensure_admin(membership)
 
         participant_map = {participant.user_id: participant for participant in event.participants}
@@ -318,7 +318,7 @@ class EventService:
         for participant_id in participant_ids:
             participant = workspace_members.get(participant_id)
             if not participant:
-                raise NotFoundError(f"Participant {participant_id} is not in workspace")
+                raise NotFoundError(f"Участник {participant_id} не входит в это рабочее пространство")
             participants.append(participant)
         return participants
 
@@ -334,7 +334,7 @@ class EventService:
             )
         )
         if not event:
-            raise NotFoundError("Event not found")
+            raise NotFoundError("Событие не найдено")
         return event
 
     def _event_updated_message(self, event: Event) -> str:

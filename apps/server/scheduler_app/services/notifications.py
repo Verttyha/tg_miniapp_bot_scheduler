@@ -121,5 +121,5 @@ class NotificationService:
 
     def _render_job(self, job: NotificationJob) -> str:
         if job.kind == NotificationKind.REMINDER.value and job.event:
-            return f"Reminder: '{job.event.title}' starts at {ensure_utc(job.event.start_at).isoformat()}."
-        return f"Notification: {job.kind}"
+            return f"Напоминание: событие «{job.event.title}» начнется {ensure_utc(job.event.start_at).isoformat()}."
+        return f"Уведомление: {job.kind}"

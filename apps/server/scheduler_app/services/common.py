@@ -42,10 +42,10 @@ async def get_workspace_for_user(
 ) -> Workspace:
     membership = await get_workspace_member(session, workspace_id, user_id)
     if not membership:
-        raise NotFoundError("Workspace not found for current user")
+        raise NotFoundError("Рабочее пространство недоступно текущему пользователю")
     return membership.workspace
 
 
 def ensure_admin(member: WorkspaceMember) -> None:
     if member.role not in {WorkspaceRole.OWNER.value, WorkspaceRole.ADMIN.value}:
-        raise PermissionDeniedError("Admin access required")
+        raise PermissionDeniedError("Требуются права администратора")

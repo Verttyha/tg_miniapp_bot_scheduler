@@ -16,7 +16,9 @@ const POLL_PAGE_TEXT = {
   deadline: "\u0414\u0435\u0434\u043b\u0430\u0439\u043d",
   voted: "\u043f\u0440\u043e\u0433\u043e\u043b\u043e\u0441\u043e\u0432\u0430\u043b\u0438",
   chatOnly:
-    "\u0413\u043e\u043b\u043e\u0441\u043e\u0432\u0430\u043d\u0438\u0435 \u0438\u0434\u0435\u0442 \u0432 Telegram-\u0447\u0430\u0442\u0435. \u0411\u043e\u0442 \u0441\u0430\u043c \u0441\u0447\u0438\u0442\u0430\u0435\u0442 \u043e\u0442\u0432\u0435\u0442\u044b \u0438 \u0437\u0430\u043a\u0440\u043e\u0435\u0442 poll \u0432 \u043c\u043e\u043c\u0435\u043d\u0442 \u0434\u0435\u0434\u043b\u0430\u0439\u043d\u0430.",
+    "\u0413\u043e\u043b\u043e\u0441\u043e\u0432\u0430\u043d\u0438\u0435 \u0438\u0434\u0435\u0442 \u0432 Telegram-\u0447\u0430\u0442\u0435. \u0411\u043e\u0442 \u0441\u0430\u043c \u0441\u0447\u0438\u0442\u0430\u0435\u0442 \u043e\u0442\u0432\u0435\u0442\u044b \u0438 \u0437\u0430\u043a\u0440\u043e\u0435\u0442 \u043e\u043f\u0440\u043e\u0441 \u0432 \u043c\u043e\u043c\u0435\u043d\u0442 \u0434\u0435\u0434\u043b\u0430\u0439\u043d\u0430.",
+  conflictHint:
+    "\u0412 \u0433\u043e\u043b\u043e\u0441\u043e\u0432\u0430\u043d\u0438\u0438 \u043d\u0443\u0436\u043d\u043e \u0440\u0435\u0448\u0435\u043d\u0438\u0435 \u0430\u0434\u043c\u0438\u043d\u0430. \u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0432\u0430\u0440\u0438\u0430\u043d\u0442 \u043d\u0438\u0436\u0435 \u0438 \u0437\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0435 \u043e\u043f\u0440\u043e\u0441.",
   optionPrefix: "\u0412\u0430\u0440\u0438\u0430\u043d\u0442",
   votes: "\u0433\u043e\u043b\u043e\u0441\u043e\u0432",
   resolveButton:
@@ -29,6 +31,7 @@ export function PollPage({ token, session }: { token: string; session: SessionPa
   const { pollId } = useParams();
   const [poll, setPoll] = useState<Poll | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedResolveOptionId, setSelectedResolveOptionId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!pollId) {
@@ -40,6 +43,7 @@ export function PollPage({ token, session }: { token: string; session: SessionPa
         const data = await getPoll(Number(pollId), token);
         if (active) {
           setPoll(data);
+          setSelectedResolveOptionId(data.user_vote_option_id);
           setError(null);
         }
       } catch (requestError) {
@@ -69,7 +73,7 @@ export function PollPage({ token, session }: { token: string; session: SessionPa
       return;
     }
     try {
-      setPoll(await resolvePoll(poll.id, poll.user_vote_option_id, token));
+      setPoll(await resolvePoll(poll.id, selectedResolveOptionId, token));
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : POLL_PAGE_TEXT.resolveError);
     }
@@ -80,6 +84,8 @@ export function PollPage({ token, session }: { token: string; session: SessionPa
     : session.workspaces[0] ?? null;
   const canManageWorkspace = workspace ? isWorkspaceAdmin(workspace, session.user.id) : false;
   const voteInChatOnly = Boolean(poll?.has_chat_poll && poll.status === "open");
+  const needsAdminResolution = poll?.status === "needs_admin_resolution";
+  const canResolveInMiniApp = Boolean(needsAdminResolution && canManageWorkspace);
 
   return (
     <section className="detail-screen">
@@ -102,18 +108,32 @@ export function PollPage({ token, session }: { token: string; session: SessionPa
           {voteInChatOnly ? (
             <div className="status-banner status-banner--muted">{POLL_PAGE_TEXT.chatOnly}</div>
           ) : null}
+          {canResolveInMiniApp ? (
+            <div className="status-banner status-banner--muted">{POLL_PAGE_TEXT.conflictHint}</div>
+          ) : null}
           <div className="vote-list">
             {poll.options.map((option) => {
-              const selected = poll.user_vote_option_id === option.id;
-              const className = `vote-card ${selected ? "vote-card--selected" : ""} ${voteInChatOnly ? "vote-card--readonly" : ""}`.trim();
+              const selected = (canResolveInMiniApp ? selectedResolveOptionId : poll.user_vote_option_id) === option.id;
+              const readonly = voteInChatOnly || poll.status === "finalized" || (needsAdminResolution && !canResolveInMiniApp);
+              const className = `vote-card ${selected ? "vote-card--selected" : ""} ${readonly ? "vote-card--readonly" : ""}`.trim();
 
-              if (voteInChatOnly) {
+              if (readonly) {
                 return (
                   <article className={className} key={option.id}>
                     <strong>{option.label ?? `${POLL_PAGE_TEXT.optionPrefix} ${option.id}`}</strong>
                     <span>{formatDateTime(option.start_at)}</span>
                     <span>{option.vote_count} {POLL_PAGE_TEXT.votes}</span>
                   </article>
+                );
+              }
+
+              if (canResolveInMiniApp) {
+                return (
+                  <button className={className} key={option.id} type="button" onClick={() => setSelectedResolveOptionId(option.id)}>
+                    <strong>{option.label ?? `${POLL_PAGE_TEXT.optionPrefix} ${option.id}`}</strong>
+                    <span>{formatDateTime(option.start_at)}</span>
+                    <span>{option.vote_count} {POLL_PAGE_TEXT.votes}</span>
+                  </button>
                 );
               }
 
@@ -128,7 +148,12 @@ export function PollPage({ token, session }: { token: string; session: SessionPa
           </div>
           {poll.status === "needs_admin_resolution" ? (
             canManageWorkspace ? (
-              <button className="action-pill action-pill--full" type="button" onClick={handleResolve}>
+              <button
+                className="action-pill action-pill--full"
+                disabled={selectedResolveOptionId === null}
+                type="button"
+                onClick={handleResolve}
+              >
                 {POLL_PAGE_TEXT.resolveButton}
               </button>
             ) : (

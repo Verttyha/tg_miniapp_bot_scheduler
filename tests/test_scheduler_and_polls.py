@@ -129,7 +129,7 @@ async def test_scheduler_resolves_due_chat_poll_from_telegram_answers(client, ap
         json={"option_id": first_option_id},
     )
     assert vote_response.status_code == 403
-    assert vote_response.json()["detail"] == "Vote in the Telegram chat poll"
+    assert vote_response.json()["detail"] == "Голосуйте в опросе Telegram-чата"
 
     poll_response = await client.get(
         f"/api/polls/{poll_id}",
@@ -143,3 +143,68 @@ async def test_scheduler_resolves_due_chat_poll_from_telegram_answers(client, ap
     assert payload["selected_option_id"] == first_option_id
     app.state.bot.stop_poll.assert_awaited_once()
     assert app.state.bot.send_message.await_count >= 1
+
+
+async def test_admin_resolves_chat_poll_conflict_from_miniapp(client, app, settings, telegram_mock):
+    owner = await authenticate(client, settings, 111221, "owner-conflict")
+    await authenticate(client, settings, 111222, "member-conflict")
+    seeded = await seed_workspace(app, 111221, 111222)
+
+    app.state.bot.send_poll = AsyncMock(
+        return_value=SimpleNamespace(
+            message_id=778,
+            poll=SimpleNamespace(id="tg-poll-conflict"),
+        )
+    )
+    app.state.bot.stop_poll = AsyncMock(return_value=SimpleNamespace(id="tg-poll-conflict"))
+    app.state.bot.send_message = AsyncMock(return_value=None)
+
+    now = datetime.now(timezone.utc)
+    create_response = await client.post(
+        f"/api/workspaces/{seeded['workspace_id']}/polls",
+        headers={"Authorization": f"Bearer {owner['access_token']}"},
+        json={
+            "title": "Conflict poll",
+            "description": "Admin decides final slot",
+            "timezone_name": "UTC",
+            "deadline_at": (now - timedelta(minutes=5)).isoformat(),
+            "participant_ids": [seeded["owner_id"], seeded["participant_id"]],
+            "options": [
+                {
+                    "label": "Morning",
+                    "start_at": (now + timedelta(hours=2)).isoformat(),
+                    "end_at": (now + timedelta(hours=3)).isoformat(),
+                },
+                {
+                    "label": "Evening",
+                    "start_at": (now + timedelta(hours=6)).isoformat(),
+                    "end_at": (now + timedelta(hours=7)).isoformat(),
+                },
+            ],
+        },
+    )
+    create_response.raise_for_status()
+    poll_payload = create_response.json()
+    poll_id = poll_payload["id"]
+    selected_option_id = poll_payload["options"][1]["id"]
+
+    await app.state.scheduler.tick()
+
+    conflict_response = await client.get(
+        f"/api/polls/{poll_id}",
+        headers={"Authorization": f"Bearer {owner['access_token']}"},
+    )
+    conflict_response.raise_for_status()
+    assert conflict_response.json()["status"] == "needs_admin_resolution"
+
+    resolve_response = await client.post(
+        f"/api/polls/{poll_id}/resolve",
+        headers={"Authorization": f"Bearer {owner['access_token']}"},
+        json={"selected_option_id": selected_option_id},
+    )
+    resolve_response.raise_for_status()
+    resolved = resolve_response.json()
+
+    assert resolved["status"] == "finalized"
+    assert resolved["selected_option_id"] == selected_option_id
+    assert resolved["resulting_event_id"] is not None

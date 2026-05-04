@@ -101,7 +101,7 @@ class WorkspaceService:
             .options(selectinload(Workspace.members).selectinload(WorkspaceMember.user))
         )
         if not workspace:
-            raise NotFoundError("Workspace not found")
+            raise NotFoundError("Рабочее пространство не найдено")
         membership = await self.session.scalar(
             select(WorkspaceMember).where(
                 WorkspaceMember.workspace_id == workspace_id,
@@ -157,10 +157,10 @@ class WorkspaceService:
             )
         )
         if not workspace:
-            raise NotFoundError("Workspace not found")
+            raise NotFoundError("Рабочее пространство не найдено")
         workspace = await self._normalize_owner_memberships(workspace)
         if workspace.owner_user_id != actor.id:
-            raise PermissionDeniedError("Only the chat owner can manage admins")
+            raise PermissionDeniedError("Только владелец чата может управлять администраторами")
         return workspace
 
     async def set_member_role(
@@ -172,7 +172,7 @@ class WorkspaceService:
         role: str,
     ) -> Workspace:
         if role not in {WorkspaceRole.ADMIN.value, WorkspaceRole.MEMBER.value}:
-            raise ConflictError("Unsupported role")
+            raise ConflictError("Неподдерживаемая роль")
 
         workspace = await self.get_workspace_for_admin_management(actor=actor, workspace_id=workspace_id)
         target_membership = await self.session.scalar(
@@ -184,9 +184,9 @@ class WorkspaceService:
             .options(selectinload(WorkspaceMember.user))
         )
         if not target_membership:
-            raise NotFoundError("Participant not found")
+            raise NotFoundError("Участник не найден")
         if target_membership.role == WorkspaceRole.OWNER.value:
-            raise PermissionDeniedError("The chat owner role cannot be changed")
+            raise PermissionDeniedError("Роль владельца чата нельзя изменить")
 
         target_membership.role = role
         await self.session.flush()

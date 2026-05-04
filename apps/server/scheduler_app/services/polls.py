@@ -24,12 +24,6 @@ from scheduler_app.services.notifications import NotificationService
 logger = logging.getLogger(__name__)
 
 
-def ensure_aware_utc(value: datetime) -> datetime:
-    if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc)
-
-
 class PollService:
     def __init__(
         self,
@@ -48,7 +42,7 @@ class PollService:
     async def list_polls(self, user: User, workspace_id: int) -> list[Poll]:
         membership = await get_workspace_member(self.session, workspace_id, user.id)
         if not membership:
-            raise NotFoundError("Workspace not found")
+            raise NotFoundError("Рабочее пространство не найдено")
         polls = await self.session.scalars(
             select(Poll)
             .where(Poll.workspace_id == workspace_id)
@@ -64,7 +58,7 @@ class PollService:
     async def create_poll(self, actor: User, workspace_id: int, payload: PollCreateRequest) -> Poll:
         membership = await get_workspace_member(self.session, workspace_id, actor.id)
         if not membership:
-            raise NotFoundError("Workspace not found")
+            raise NotFoundError("Рабочее пространство не найдено")
         ensure_admin(membership)
 
         workspace = await self.session.scalar(
@@ -73,7 +67,7 @@ class PollService:
             .options(selectinload(Workspace.telegram_chat))
         )
         if not workspace:
-            raise NotFoundError("Workspace not found")
+            raise NotFoundError("Рабочее пространство не найдено")
 
         poll = Poll(
             workspace_id=workspace_id,
@@ -112,21 +106,21 @@ class PollService:
         poll = await self._load_poll(poll_id)
         membership = await get_workspace_member(self.session, poll.workspace_id, user.id)
         if not membership:
-            raise NotFoundError("Poll not found")
+            raise NotFoundError("Голосование не найдено")
         user_vote = next((vote.option_id for vote in poll.votes if vote.user_id == user.id), None)
         return poll, user_vote
 
     async def vote(self, user: User, poll_id: int, payload: VoteRequest) -> Poll:
         poll, _ = await self.get_poll(user, poll_id)
         if poll.telegram_chat_poll:
-            raise PermissionDeniedError("Vote in the Telegram chat poll")
+            raise PermissionDeniedError("Голосуйте в опросе Telegram-чата")
         if poll.status != PollStatus.OPEN.value:
-            raise PermissionDeniedError("Voting is closed")
+            raise PermissionDeniedError("Голосование закрыто")
         if user.id not in poll.participant_ids:
-            raise PermissionDeniedError("User is not included in this poll")
+            raise PermissionDeniedError("Пользователь не добавлен в это голосование")
         option = next((item for item in poll.options if item.id == payload.option_id), None)
         if not option:
-            raise NotFoundError("Poll option not found")
+            raise NotFoundError("Вариант голосования не найден")
 
         vote = await self.session.scalar(
             select(Vote).where(Vote.poll_id == poll.id, Vote.user_id == user.id)
@@ -191,7 +185,7 @@ class PollService:
         poll = await self._load_poll(poll_id)
         membership = await get_workspace_member(self.session, poll.workspace_id, actor.id)
         if not membership:
-            raise NotFoundError("Poll not found")
+            raise NotFoundError("Голосование не найдено")
         ensure_admin(membership)
         await self._close_telegram_chat_poll(poll, raise_on_error=False)
         return await self._resolve_poll(poll, selected_option_id=payload.selected_option_id)
@@ -217,7 +211,7 @@ class PollService:
         if selected_option_id is not None:
             option = next((item for item in poll.options if item.id == selected_option_id), None)
             if not option:
-                raise NotFoundError("Selected poll option not found")
+                raise NotFoundError("Выбранный вариант голосования не найден")
         else:
             option = self._pick_winning_option(poll)
 
@@ -226,7 +220,7 @@ class PollService:
             users = await self._poll_participants(poll)
             await self.notification_service.send_to_users(
                 users,
-                f"Poll '{poll.title}' needs admin resolution before an event can be created.",
+                f"Голосование «{poll.title}» завершилось без победителя. Администратору нужно выбрать итоговый вариант в Mini App.",
             )
             await self._send_chat_message(
                 poll,
@@ -238,8 +232,8 @@ class PollService:
         payload = EventCreateRequest(
             title=poll.title,
             description=poll.description,
-            start_at=ensure_aware_utc(option.start_at),
-            end_at=ensure_aware_utc(option.end_at),
+            start_at=option.start_at,
+            end_at=option.end_at,
             timezone_name=poll.timezone_name,
             participant_ids=poll.participant_ids,
         )
@@ -256,7 +250,7 @@ class PollService:
         poll.status = PollStatus.FINALIZED.value
         await self.notification_service.send_to_users(
             await self._poll_participants(poll),
-            f"Poll '{poll.title}' has been finalized. Event starts at {option.start_at.isoformat()}",
+            f"Голосование «{poll.title}» завершено. Событие начнется {option.start_at.isoformat()}",
         )
         await self._send_chat_message(
             poll,
@@ -274,7 +268,7 @@ class PollService:
         if not workspace.telegram_chat:
             return
         if not self.bot or self.settings.bot_token.endswith(":CHANGE_ME"):
-            raise ServiceError("Telegram bot is not configured to publish chat polls")
+            raise ServiceError("Бот Telegram не настроен для публикации голосований в чате")
 
         try:
             sent_message = await self.bot.send_poll(
@@ -285,10 +279,10 @@ class PollService:
                 allows_multiple_answers=False,
             )
         except TelegramAPIError as exc:
-            raise ServiceError(f"Unable to publish Telegram poll to the chat: {exc}") from exc
+            raise ServiceError(f"Не удалось опубликовать голосование в Telegram-чате: {exc}") from exc
 
         if not sent_message.poll:
-            raise ServiceError("Telegram did not return poll details for the created chat poll")
+            raise ServiceError("Telegram не вернул данные созданного голосования")
 
         self.session.add(
             TelegramChatPoll(
@@ -306,7 +300,7 @@ class PollService:
             return
         if not self.bot or self.settings.bot_token.endswith(":CHANGE_ME"):
             if raise_on_error:
-                raise ServiceError("Telegram bot is not configured to close chat polls")
+                raise ServiceError("Бот Telegram не настроен для закрытия голосований в чате")
             return
 
         try:
@@ -314,11 +308,7 @@ class PollService:
                 chat_id=chat_poll.telegram_chat_id,
                 message_id=chat_poll.telegram_message_id,
             )
-        except TelegramAPIError as exc:
-            if "poll has already been closed" in str(exc).lower():
-                chat_poll.closed_at = datetime.now(timezone.utc)
-                await self.session.flush()
-                return
+        except TelegramAPIError:
             if raise_on_error:
                 raise
             logger.exception("Failed to close Telegram chat poll for poll %s", poll.id)
@@ -358,7 +348,7 @@ class PollService:
             )
         )
         if not poll:
-            raise NotFoundError("Poll not found")
+            raise NotFoundError("Голосование не найдено")
         return poll
 
     def _pick_winning_option(self, poll: Poll) -> PollOption | None:
@@ -380,8 +370,8 @@ class PollService:
 
     def _build_option_label(self, poll: Poll, option: PollOption) -> str:
         timezone_info = self._resolve_timezone(poll.timezone_name)
-        start_at = ensure_aware_utc(option.start_at).astimezone(timezone_info)
-        end_at = ensure_aware_utc(option.end_at).astimezone(timezone_info)
+        start_at = option.start_at.astimezone(timezone_info)
+        end_at = option.end_at.astimezone(timezone_info)
         timing = f"{start_at:%d.%m %H:%M}-{end_at:%H:%M}"
         prefix = f"{option.label.strip()} " if option.label and option.label.strip() else ""
         return f"{prefix}{timing}"[:100]

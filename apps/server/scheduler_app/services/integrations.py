@@ -33,19 +33,19 @@ class IntegrationService:
 
     def get_provider(self, provider: str):
         if provider not in self.providers:
-            raise NotFoundError("Unknown calendar provider")
+            raise NotFoundError("Неизвестный провайдер календаря")
         return self.providers[provider]
 
     async def build_connect_link(self, user: User, provider: str) -> str:
         if provider == "google" and (not self.settings.google_client_id or not self.settings.google_client_secret):
-            raise ServiceError("Google integration is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.")
+            raise ServiceError("Интеграция Google не настроена. Укажите GOOGLE_CLIENT_ID и GOOGLE_CLIENT_SECRET.")
         state = build_oauth_state(user.id, provider, self.settings.app_secret)
         return await self.get_provider(provider).build_authorize_url(state)
 
     async def handle_callback(self, provider: str, code: str, state: str) -> CalendarConnection:
         decoded = read_oauth_state(state, self.settings.app_secret)
         if decoded["provider"] != provider:
-            raise PermissionDeniedError("OAuth state provider mismatch")
+            raise PermissionDeniedError("Провайдер OAuth не совпадает с сохраненным состоянием")
         user_id = int(decoded["sub"])
         provider_impl = self.get_provider(provider)
         tokens = await provider_impl.exchange_code(code)
@@ -106,7 +106,7 @@ class IntegrationService:
             select(CalendarConnection).where(CalendarConnection.id == connection_id)
         )
         if not connection or connection.user_id != user.id:
-            raise NotFoundError("Calendar connection not found")
+            raise NotFoundError("Подключение календаря не найдено")
         if payload.calendar_id is not None:
             connection.calendar_id = payload.calendar_id
         if payload.calendar_name is not None:

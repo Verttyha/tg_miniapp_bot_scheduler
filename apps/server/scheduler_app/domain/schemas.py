@@ -115,17 +115,17 @@ class EventCreateRequest(BaseModel):
     @classmethod
     def validate_participant_ids(cls, value: list[int]) -> list[int]:
         if not value:
-            raise ValueError("At least one participant is required")
+            raise ValueError("Нужен хотя бы один участник")
         return value
 
     @model_validator(mode="after")
     def validate_time_range(self):
         if self.start_at.tzinfo is None or self.end_at.tzinfo is None:
-            raise ValueError("start_at and end_at must include timezone")
+            raise ValueError("Время начала и окончания должно включать часовой пояс")
         if self.end_at <= self.start_at:
-            raise ValueError("end_at must be greater than start_at")
+            raise ValueError("Время окончания должно быть позже времени начала")
         if not self.timezone_name.strip():
-            raise ValueError("timezone_name is required")
+            raise ValueError("Нужно указать часовой пояс")
         return self
 
 
@@ -142,19 +142,19 @@ class EventUpdateRequest(BaseModel):
     @classmethod
     def validate_optional_participant_ids(cls, value: list[int] | None) -> list[int] | None:
         if value is not None and not value:
-            raise ValueError("At least one participant is required")
+            raise ValueError("Нужен хотя бы один участник")
         return value
 
     @model_validator(mode="after")
     def validate_time_range(self):
         if self.start_at is not None and self.start_at.tzinfo is None:
-            raise ValueError("start_at must include timezone")
+            raise ValueError("Время начала должно включать часовой пояс")
         if self.end_at is not None and self.end_at.tzinfo is None:
-            raise ValueError("end_at must include timezone")
+            raise ValueError("Время окончания должно включать часовой пояс")
         if self.start_at is not None and self.end_at is not None and self.end_at <= self.start_at:
-            raise ValueError("end_at must be greater than start_at")
+            raise ValueError("Время окончания должно быть позже времени начала")
         if self.timezone_name is not None and not self.timezone_name.strip():
-            raise ValueError("timezone_name is required")
+            raise ValueError("Нужно указать часовой пояс")
         return self
 
 
@@ -176,9 +176,9 @@ class PollOptionInput(BaseModel):
     @model_validator(mode="after")
     def validate_range(self):
         if self.start_at.tzinfo is None or self.end_at.tzinfo is None:
-            raise ValueError("start_at and end_at must include timezone")
+            raise ValueError("Время начала и окончания должно включать часовой пояс")
         if self.end_at <= self.start_at:
-            raise ValueError("Poll option end_at must be greater than start_at")
+            raise ValueError("Вариант голосования должен заканчиваться позже начала")
         return self
 
 
@@ -194,17 +194,17 @@ class PollCreateRequest(BaseModel):
     @classmethod
     def validate_poll_participants(cls, value: list[int]) -> list[int]:
         if not value:
-            raise ValueError("At least one participant is required")
+            raise ValueError("Нужен хотя бы один участник")
         return value
 
     @model_validator(mode="after")
     def validate_deadline(self):
         if self.deadline_at.tzinfo is None:
-            raise ValueError("deadline_at must include timezone")
+            raise ValueError("Дедлайн должен включать часовой пояс")
         if not self.timezone_name.strip():
-            raise ValueError("timezone_name is required")
+            raise ValueError("Нужно указать часовой пояс")
         if not self.options:
-            raise ValueError("At least one option is required")
+            raise ValueError("Нужен хотя бы один вариант")
         return self
 
 

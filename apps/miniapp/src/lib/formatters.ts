@@ -60,7 +60,7 @@ export function countPollVotes(poll: Poll) {
 }
 
 export function getUserDisplayName(user: User) {
-  return user.first_name || user.username || `User ${user.id}`;
+  return user.first_name || user.username || `Пользователь ${user.id}`;
 }
 
 export function translatePollStatus(status: string) {
