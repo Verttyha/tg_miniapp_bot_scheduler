@@ -109,6 +109,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await bot.delete_webhook(drop_pending_updates=False)
         except TelegramAPIError as exc:
             logger.warning("Telegram webhook delete before polling failed: %s", exc)
+        except Exception as exc:  # noqa: BLE001 - polling startup must survive network/proxy failures
+            logger.warning("Telegram webhook delete before polling failed with unexpected error: %s", exc)
         task = asyncio.create_task(
             dispatcher.start_polling(
                 bot,
