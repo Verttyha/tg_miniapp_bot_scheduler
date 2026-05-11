@@ -468,6 +468,7 @@ def build_router(session_factory: async_sessionmaker, settings: Settings) -> Rou
         async with session_factory() as session:
             service = PollService(session, settings, cipher, bot=bot)
             await service.sync_telegram_poll_answer(answer)
+            await service.resolve_ready_polls()
             await session.commit()
 
     @router.my_chat_member(ChatMemberUpdatedFilter(member_status_changed=KICKED | LEFT))

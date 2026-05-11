@@ -194,8 +194,7 @@ export function DashboardHomePage({ token, session }: { token: string; session: 
     })),
   ];
   const upcomingEvents = scheduledItems
-    .sort((left, right) => new Date(left.startAt).getTime() - new Date(right.startAt).getTime())
-    .slice(0, 4);
+    .sort((left, right) => new Date(left.startAt).getTime() - new Date(right.startAt).getTime());
   const featuredEvent = upcomingEvents[0] ?? null;
   const secondaryEvents = featuredEvent ? upcomingEvents.slice(1) : [];
   const openPolls = polls

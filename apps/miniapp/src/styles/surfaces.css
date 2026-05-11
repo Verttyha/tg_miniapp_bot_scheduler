@@ -40,6 +40,13 @@
   gap: 14px;
 }
 
+.dashboard-events {
+  max-height: 560px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+}
+
 .notice,
 .empty-card,
 .status-banner,

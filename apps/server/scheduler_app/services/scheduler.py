@@ -66,7 +66,7 @@ class SchedulerRunner:
             try:
                 await asyncio.wait_for(
                     self._stop_event.wait(),
-                    timeout=self.settings.scheduler_interval_seconds,
+                    timeout=min(self.settings.scheduler_interval_seconds, 15),
                 )
             except asyncio.TimeoutError:
                 continue
