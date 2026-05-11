@@ -118,11 +118,21 @@ def validate_telegram_init_data(raw_init_data: str, bot_token: str, max_age_seco
     if not hmac.compare_digest(calculated_hash, received_hash):
         raise SecurityError("Telegram init data hash mismatch")
 
-    auth_date = datetime.fromtimestamp(int(params["auth_date"]), tz=timezone.utc)
+    try:
+        auth_date = datetime.fromtimestamp(int(params["auth_date"]), tz=timezone.utc)
+    except (KeyError, ValueError, OSError) as exc:
+        raise SecurityError("Telegram init data auth_date is invalid") from exc
     if datetime.now(timezone.utc) - auth_date > timedelta(seconds=max_age_seconds):
         raise SecurityError("Telegram init data expired")
 
-    user_payload = json.loads(params["user"])
+    try:
+        user_payload = json.loads(params["user"])
+    except KeyError as exc:
+        raise SecurityError("Telegram init data is missing user") from exc
+    except json.JSONDecodeError as exc:
+        raise SecurityError("Telegram init data user is invalid") from exc
+    if not isinstance(user_payload, dict) or "id" not in user_payload:
+        raise SecurityError("Telegram init data user id is missing")
     return TelegramInitData(
         raw=raw_init_data,
         user=user_payload,
