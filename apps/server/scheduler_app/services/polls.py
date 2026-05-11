@@ -209,6 +209,11 @@ class PollService:
         return resolved
 
     async def _resolve_poll(self, poll: Poll, *, selected_option_id: int | None = None) -> Poll:
+        if poll.status == PollStatus.FINALIZED.value:
+            return await self._load_poll(poll.id)
+        if poll.status == PollStatus.CANCELLED.value:
+            raise PermissionDeniedError("Голосование закрыто")
+
         option = None
         if selected_option_id is not None:
             option = next((item for item in poll.options if item.id == selected_option_id), None)
