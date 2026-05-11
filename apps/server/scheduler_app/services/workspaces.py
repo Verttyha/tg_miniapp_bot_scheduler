@@ -95,33 +95,21 @@ class WorkspaceService:
         return refreshed or workspace
 
     async def join_workspace(self, user: User, workspace_id: int) -> Workspace:
-        workspace = await self.session.scalar(
-            select(Workspace)
-            .where(Workspace.id == workspace_id)
-            .options(selectinload(Workspace.members).selectinload(WorkspaceMember.user))
-        )
-        if not workspace:
-            raise NotFoundError("Рабочее пространство не найдено")
         membership = await self.session.scalar(
-            select(WorkspaceMember).where(
+            select(WorkspaceMember)
+            .where(
                 WorkspaceMember.workspace_id == workspace_id,
                 WorkspaceMember.user_id == user.id,
             )
-        )
-        if not membership:
-            membership = WorkspaceMember(
-                workspace_id=workspace.id,
-                user_id=user.id,
-                role=WorkspaceRole.MEMBER.value,
+            .options(
+                selectinload(WorkspaceMember.workspace)
+                .selectinload(Workspace.members)
+                .selectinload(WorkspaceMember.user),
             )
-            self.session.add(membership)
-            await self.session.flush()
-        refreshed = await self.session.scalar(
-            select(Workspace)
-            .where(Workspace.id == workspace.id)
-            .options(selectinload(Workspace.members).selectinload(WorkspaceMember.user))
         )
-        return refreshed or workspace
+        if not membership or not membership.workspace.telegram_chat_id:
+            raise NotFoundError("Рабочее пространство не найдено")
+        return membership.workspace
 
     async def list_owned_workspaces(self, user: User) -> list[Workspace]:
         workspaces = (
