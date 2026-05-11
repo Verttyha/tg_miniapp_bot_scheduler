@@ -28,6 +28,7 @@ async def list_polls(
         polls = await service.list_polls(current_user, workspace_id)
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    await session.commit()
     return [poll_read(poll) for poll in polls]
 
 
@@ -67,6 +68,7 @@ async def get_poll(
         poll, user_vote = await service.get_poll(current_user, poll_id)
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    await session.commit()
     return poll_read(poll, user_vote_option_id=user_vote)
 
 

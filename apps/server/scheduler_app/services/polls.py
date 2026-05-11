@@ -53,7 +53,10 @@ class PollService:
             )
             .order_by(Poll.deadline_at.desc())
         )
-        return list(polls)
+        result = []
+        for poll in list(polls):
+            result.append(await self._resolve_if_everyone_voted(poll))
+        return result
 
     async def create_poll(self, actor: User, workspace_id: int, payload: PollCreateRequest) -> Poll:
         membership = await get_workspace_member(self.session, workspace_id, actor.id)
@@ -109,6 +112,7 @@ class PollService:
         membership = await get_workspace_member(self.session, poll.workspace_id, user.id)
         if not membership:
             raise NotFoundError("Голосование не найдено")
+        poll = await self._resolve_if_everyone_voted(poll)
         user_vote = next((vote.option_id for vote in poll.votes if vote.user_id == user.id), None)
         return poll, user_vote
 
@@ -133,7 +137,8 @@ class PollService:
         else:
             vote.option_id = payload.option_id
         await self.session.flush()
-        return await self._load_poll(poll.id)
+        poll = await self._load_poll(poll.id)
+        return await self._resolve_if_everyone_voted(poll)
 
     async def delete_poll(self, actor: User, poll_id: int) -> Poll:
         poll = await self._load_poll(poll_id)
@@ -199,7 +204,8 @@ class PollService:
         else:
             existing_vote.option_id = selected_option.id
         await self.session.flush()
-        return await self._load_poll(poll.id)
+        poll = await self._load_poll(poll.id)
+        return await self._resolve_if_everyone_voted(poll)
 
     async def resolve(self, actor: User, poll_id: int, payload: PollResolveRequest) -> Poll:
         poll = await self._load_poll(poll_id)
@@ -225,6 +231,25 @@ class PollService:
             await self._close_telegram_chat_poll(poll, raise_on_error=False)
             resolved.append(await self._resolve_poll(poll))
         return resolved
+
+    async def _resolve_if_everyone_voted(self, poll: Poll) -> Poll:
+        if poll.status != PollStatus.OPEN.value:
+            return poll
+        voted_user_ids = {vote.user_id for vote in poll.votes}
+        participant_ids = set(poll.participant_ids)
+        if not participant_ids or not participant_ids.issubset(voted_user_ids):
+            return poll
+        await self._close_telegram_chat_poll(poll, raise_on_error=False)
+        return await self._resolve_poll(poll)
+
+    def _ensure_poll_timezone(self, value: datetime, timezone_name: str) -> datetime:
+        if value.tzinfo is not None:
+            return value
+        try:
+            timezone_info = ZoneInfo(timezone_name)
+        except ZoneInfoNotFoundError:
+            timezone_info = timezone.utc
+        return value.replace(tzinfo=timezone_info)
 
     async def _resolve_poll(self, poll: Poll, *, selected_option_id: int | None = None) -> Poll:
         if poll.status == PollStatus.FINALIZED.value:
@@ -257,8 +282,8 @@ class PollService:
         payload = EventCreateRequest(
             title=poll.title,
             description=poll.description,
-            start_at=option.start_at,
-            end_at=option.end_at,
+            start_at=self._ensure_poll_timezone(option.start_at, poll.timezone_name),
+            end_at=self._ensure_poll_timezone(option.end_at, poll.timezone_name),
             timezone_name=poll.timezone_name,
             participant_ids=poll.participant_ids,
         )

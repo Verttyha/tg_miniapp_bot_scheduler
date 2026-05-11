@@ -341,10 +341,13 @@
 .poll-feature {
   display: grid;
   gap: 6px;
+  margin-bottom: 14px;
   padding: 16px 18px;
   border-radius: 20px;
   border: 1px solid rgba(76, 178, 255, 0.22);
   background: linear-gradient(135deg, rgba(76, 178, 255, 0.12), rgba(255, 255, 255, 0.04));
+  color: inherit;
+  text-decoration: none;
 }
 
 .poll-feature strong {
