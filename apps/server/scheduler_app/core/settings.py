@@ -68,6 +68,8 @@ class Settings(BaseSettings):
     def should_sync_telegram_webhook(self) -> bool:
         if not self.sync_telegram_webhook_on_startup:
             return False
+        if self.telegram_updates_mode.lower() != "webhook":
+            return False
         parsed = urlparse(self.base_url)
         hostname = (parsed.hostname or "").lower()
         return (
