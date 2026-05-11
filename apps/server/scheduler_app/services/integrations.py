@@ -114,6 +114,9 @@ class IntegrationService:
         if payload.calendar_name is not None:
             connection.calendar_name = payload.calendar_name
         if payload.status is not None:
+            allowed_statuses = {status.value for status in ConnectionStatus}
+            if payload.status not in allowed_statuses:
+                raise PermissionDeniedError("Неподдерживаемый статус подключения календаря")
             connection.status = payload.status
         await self.session.commit()
         await self.session.refresh(connection)
