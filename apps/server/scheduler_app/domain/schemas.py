@@ -113,6 +113,13 @@ class EventCreateRequest(BaseModel):
     timezone_name: str = "Europe/Moscow"
     participant_ids: list[int]
 
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Нужно указать название")
+        return value
+
     @field_validator("participant_ids")
     @classmethod
     def validate_participant_ids(cls, value: list[int]) -> list[int]:
@@ -141,6 +148,13 @@ class EventUpdateRequest(BaseModel):
     end_at: datetime | None = None
     timezone_name: str | None = None
     participant_ids: list[int] | None = None
+
+    @field_validator("title")
+    @classmethod
+    def validate_optional_title(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("Нужно указать название")
+        return value
 
     @field_validator("participant_ids")
     @classmethod
@@ -203,6 +217,13 @@ class PollCreateRequest(BaseModel):
     deadline_at: datetime
     participant_ids: list[int]
     options: list[PollOptionInput]
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Нужно указать название")
+        return value
 
     @field_validator("participant_ids")
     @classmethod
