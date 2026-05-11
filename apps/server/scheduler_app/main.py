@@ -12,7 +12,7 @@ from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.exceptions import TelegramAPIError
 from aiogram.enums import ParseMode
 from aiogram.types import BotCommand, BotCommandScopeAllGroupChats, BotCommandScopeAllPrivateChats, Update
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
@@ -212,10 +212,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/app/{path:path}")
     async def serve_miniapp(path: str = ""):
         dist_dir = runtime_settings.frontend_dist_dir
-        requested_path = dist_dir / path if path else dist_dir / "index.html"
+        index_path = dist_dir / "index.html"
+        if not index_path.exists():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mini App bundle not found")
+        requested_path = dist_dir / path if path else index_path
         if path and requested_path.exists() and requested_path.is_file():
             return FileResponse(requested_path)
-        return FileResponse(dist_dir / "index.html")
+        return FileResponse(index_path)
 
     return app
 
