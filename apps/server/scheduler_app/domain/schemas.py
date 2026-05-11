@@ -240,8 +240,10 @@ class PollCreateRequest(BaseModel):
             raise ValueError("Дедлайн должен включать часовой пояс")
         if not self.timezone_name.strip():
             raise ValueError("Нужно указать часовой пояс")
-        if not self.options:
-            raise ValueError("Нужен хотя бы один вариант")
+        if len(self.options) < 2:
+            raise ValueError("Нужно указать минимум два варианта")
+        if len(self.options) > 10:
+            raise ValueError("Нельзя указать больше десяти вариантов")
         return self
 
 
