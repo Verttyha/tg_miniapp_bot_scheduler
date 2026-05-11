@@ -29,6 +29,7 @@ class SchedulerRunner:
         self.bot = bot
         self._task: asyncio.Task | None = None
         self._stop_event = asyncio.Event()
+        self._tick_lock = asyncio.Lock()
 
     def start(self) -> None:
         if self._task:
@@ -44,12 +45,13 @@ class SchedulerRunner:
         self._task = None
 
     async def tick(self) -> None:
-        async with self.session_factory() as session:
-            poll_service = PollService(session, self.settings, self.cipher, bot=self.bot)
-            notification_service = NotificationService(session, self.settings)
-            await poll_service.resolve_due_polls()
-            await notification_service.dispatch_due_jobs()
-            await session.commit()
+        async with self._tick_lock:
+            async with self.session_factory() as session:
+                poll_service = PollService(session, self.settings, self.cipher, bot=self.bot)
+                notification_service = NotificationService(session, self.settings)
+                await poll_service.resolve_due_polls()
+                await notification_service.dispatch_due_jobs()
+                await session.commit()
 
     async def trigger(self) -> None:
         try:
