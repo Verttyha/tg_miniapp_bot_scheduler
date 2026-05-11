@@ -180,6 +180,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return RedirectResponse(url="/app")
 
     @app.get("/health")
+    @app.head("/health")
     async def health() -> dict[str, str]:
         return {"status": "ok"}
 
@@ -209,7 +210,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"ok": True}
 
     @app.get("/app")
+    @app.head("/app")
     @app.get("/app/{path:path}")
+    @app.head("/app/{path:path}")
     async def serve_miniapp(path: str = ""):
         dist_dir = runtime_settings.frontend_dist_dir
         index_path = dist_dir / "index.html"
