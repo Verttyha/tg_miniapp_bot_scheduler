@@ -68,6 +68,18 @@ class CalendarConnectionRead(BaseModel):
     calendars: list[CalendarOptionRead] = Field(default_factory=list)
 
 
+class ExternalCalendarEventRead(BaseModel):
+    id: str
+    calendar_id: str
+    title: str
+    description: str | None = None
+    location: str | None = None
+    start_at: datetime
+    end_at: datetime
+    all_day: bool = False
+    html_link: str | None = None
+
+
 class IntegrationLinkResponse(BaseModel):
     authorize_url: str
     provider: str

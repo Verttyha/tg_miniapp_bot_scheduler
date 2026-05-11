@@ -9,7 +9,12 @@ from scheduler_app.core.deps import get_current_user, get_session, get_settings,
 from scheduler_app.core.security import SecurityError, TokenCipher
 from scheduler_app.core.settings import Settings
 from scheduler_app.domain.models import User
-from scheduler_app.domain.schemas import CalendarConnectionRead, IntegrationLinkResponse, IntegrationUpdateRequest
+from scheduler_app.domain.schemas import (
+    CalendarConnectionRead,
+    ExternalCalendarEventRead,
+    IntegrationLinkResponse,
+    IntegrationUpdateRequest,
+)
 from scheduler_app.services.common import NotFoundError, PermissionDeniedError, ServiceError
 from scheduler_app.services.integrations import IntegrationService
 from scheduler_app.services.presenters import connection_read
@@ -83,6 +88,21 @@ async def connect_yandex(
     except ServiceError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return IntegrationLinkResponse(authorize_url=url, provider="yandex")
+
+
+@router.get("/google/events", response_model=list[ExternalCalendarEventRead])
+async def list_google_events(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+    cipher: TokenCipher = Depends(get_cipher),
+) -> list[ExternalCalendarEventRead]:
+    service = IntegrationService(session, settings, cipher)
+    try:
+        events = await service.list_google_events(current_user)
+    except ServiceError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    return [ExternalCalendarEventRead(**event) for event in events]
 
 
 @router.patch("/{connection_id}", response_model=CalendarConnectionRead)

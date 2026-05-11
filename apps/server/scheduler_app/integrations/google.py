@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from urllib.parse import quote, urlencode
 
 import httpx
@@ -104,6 +104,50 @@ class GoogleCalendarProvider:
             items = response.json().get("items", [])
         return [{"id": item["id"], "name": item.get("summary", item["id"])} for item in items]
 
+    async def list_events(self, connection: CalendarConnection, *, max_results: int = 20) -> list[dict]:
+        token = self.cipher.decrypt(connection.access_token_encrypted)
+        if not token:
+            return []
+        calendar_id = connection.calendar_id or "primary"
+        encoded_calendar_id = quote(calendar_id, safe="")
+        time_min = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            response = await client.get(
+                f"https://www.googleapis.com/calendar/v3/calendars/{encoded_calendar_id}/events",
+                headers={"Authorization": f"Bearer {token}"},
+                params={
+                    "singleEvents": "true",
+                    "orderBy": "startTime",
+                    "timeMin": time_min,
+                    "maxResults": max_results,
+                },
+            )
+            response.raise_for_status()
+            items = response.json().get("items", [])
+
+        events = []
+        for item in items:
+            if item.get("status") == "cancelled":
+                continue
+            start_at, all_day = self._parse_google_event_time(item.get("start", {}))
+            end_at, _ = self._parse_google_event_time(item.get("end", {}))
+            if not start_at or not end_at:
+                continue
+            events.append(
+                {
+                    "id": item["id"],
+                    "calendar_id": calendar_id,
+                    "title": item.get("summary") or "(\u0411\u0435\u0437 \u043d\u0430\u0437\u0432\u0430\u043d\u0438\u044f)",
+                    "description": item.get("description"),
+                    "location": item.get("location"),
+                    "start_at": start_at,
+                    "end_at": end_at,
+                    "all_day": all_day,
+                    "html_link": item.get("htmlLink"),
+                }
+            )
+        return events
+
     async def create_event(self, connection: CalendarConnection, event: Event, participant: User) -> ProviderEventRef:
         token = self.cipher.decrypt(connection.access_token_encrypted)
         calendar_id = quote(connection.calendar_id or "primary", safe="")
@@ -168,3 +212,11 @@ class GoogleCalendarProvider:
                 }
             },
         }
+
+    def _parse_google_event_time(self, payload: dict) -> tuple[datetime | None, bool]:
+        if payload.get("dateTime"):
+            return datetime.fromisoformat(payload["dateTime"].replace("Z", "+00:00")), False
+        if payload.get("date"):
+            event_date = date.fromisoformat(payload["date"])
+            return datetime.combine(event_date, time.min, tzinfo=timezone.utc), True
+        return None, False

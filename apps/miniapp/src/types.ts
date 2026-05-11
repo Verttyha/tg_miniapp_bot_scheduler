@@ -86,6 +86,18 @@ export interface CalendarConnection {
   calendars: CalendarOption[];
 }
 
+export interface ExternalCalendarEvent {
+  id: string;
+  calendar_id: string;
+  title: string;
+  description: string | null;
+  location: string | null;
+  start_at: string;
+  end_at: string;
+  all_day: boolean;
+  html_link: string | null;
+}
+
 export interface SessionPayload {
   access_token: string;
   user: User;

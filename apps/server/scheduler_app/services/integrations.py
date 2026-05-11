@@ -101,6 +101,28 @@ class IntegrationService:
         await self.session.commit()
         return result
 
+    async def list_google_events(self, user: User) -> list[dict]:
+        connection = await self.session.scalar(
+            select(CalendarConnection).where(
+                CalendarConnection.user_id == user.id,
+                CalendarConnection.provider == "google",
+            )
+        )
+        if not connection or connection.status != ConnectionStatus.ACTIVE.value:
+            return []
+        await self.ensure_fresh_connection(connection)
+        if connection.status != ConnectionStatus.ACTIVE.value:
+            await self.session.commit()
+            return []
+        try:
+            events = await self.get_provider("google").list_events(connection)
+        except (httpx.HTTPError, SecurityError) as exc:
+            connection.status = ConnectionStatus.ERROR.value
+            await self.session.commit()
+            raise ServiceError("\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u0441\u043e\u0431\u044b\u0442\u0438\u044f Google Calendar") from exc
+        await self.session.commit()
+        return events
+
     async def update_connection(
         self,
         user: User,

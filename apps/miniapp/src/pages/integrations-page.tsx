@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { connectProvider, getIntegrations, updateIntegration } from "../api";
+import { connectProvider, getGoogleCalendarEvents, getIntegrations, updateIntegration } from "../api";
 import { ScreenHeader } from "../components/layout/screen-header";
-import { capitalize, translateConnectionStatus } from "../lib/formatters";
-import type { CalendarConnection } from "../types";
+import { capitalize, formatDateTime, translateConnectionStatus } from "../lib/formatters";
+import type { CalendarConnection, ExternalCalendarEvent } from "../types";
 
 const INTEGRATIONS_TEXT = {
   loadError: "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u0438\u043d\u0442\u0435\u0433\u0440\u0430\u0446\u0438\u0438",
@@ -17,12 +17,18 @@ const INTEGRATIONS_TEXT = {
   pendingAuth: "\u0410\u0432\u0442\u043e\u0440\u0438\u0437\u0430\u0446\u0438\u044f \u0435\u0449\u0435 \u043d\u0435 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u0430",
   yandexDisabled: "Yandex временно отключен",
   calendarLabel: "\u041a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c \u0434\u043b\u044f \u0437\u0430\u043f\u0438\u0441\u0438 \u0441\u043e\u0431\u044b\u0442\u0438\u0439",
-  chooseCalendar: "\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u043a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c"
+  chooseCalendar: "\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u043a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c",
+  googleEventsTitle: "\u0421\u043e\u0431\u044b\u0442\u0438\u044f Google Calendar",
+  googleEventsLoading: "\u0417\u0430\u0433\u0440\u0443\u0436\u0430\u044e \u0441\u043e\u0431\u044b\u0442\u0438\u044f Google...",
+  googleEventsEmpty: "\u0412 \u0432\u044b\u0431\u0440\u0430\u043d\u043d\u043e\u043c \u043a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u0435 \u043d\u0435\u0442 \u0431\u043b\u0438\u0436\u0430\u0439\u0448\u0438\u0445 \u0441\u043e\u0431\u044b\u0442\u0438\u0439",
+  allDay: "\u0412\u0435\u0441\u044c \u0434\u0435\u043d\u044c"
 };
 
 export function IntegrationsPage({ token }: { token: string }) {
   const [connections, setConnections] = useState<CalendarConnection[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [googleEvents, setGoogleEvents] = useState<ExternalCalendarEvent[]>([]);
+  const [googleEventsLoading, setGoogleEventsLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const requestSeq = useRef(0);
@@ -42,6 +48,17 @@ export function IntegrationsPage({ token }: { token: string }) {
         return;
       }
       setConnections(data);
+      const activeGoogle = data.some((connection) => connection.provider === "google" && connection.status === "active");
+      if (activeGoogle) {
+        setGoogleEventsLoading(true);
+        const events = await getGoogleCalendarEvents(token);
+        if (requestId !== requestSeq.current) {
+          return;
+        }
+        setGoogleEvents(events);
+      } else {
+        setGoogleEvents([]);
+      }
       setError(null);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : INTEGRATIONS_TEXT.loadError);
@@ -49,6 +66,7 @@ export function IntegrationsPage({ token }: { token: string }) {
       hasLoadedOnce.current = true;
       setInitialLoading(false);
       setRefreshing(false);
+      setGoogleEventsLoading(false);
     }
   }
 
@@ -143,6 +161,41 @@ export function IntegrationsPage({ token }: { token: string }) {
           </article>
         ))}
       </div>
+
+      {googleActive ? (
+        <section className="integration-card">
+          <div className="integration-card__header">
+            <div>
+              <h2>{INTEGRATIONS_TEXT.googleEventsTitle}</h2>
+              <p>{googleConnection?.calendar_name ?? googleConnection?.calendar_id}</p>
+            </div>
+          </div>
+
+          {googleEventsLoading ? <div className="empty-card empty-card--compact">{INTEGRATIONS_TEXT.googleEventsLoading}</div> : null}
+          {!googleEventsLoading && googleEvents.length === 0 ? (
+            <div className="empty-card empty-card--compact">{INTEGRATIONS_TEXT.googleEventsEmpty}</div>
+          ) : null}
+          {!googleEventsLoading && googleEvents.length > 0 ? (
+            <div className="integrations-list">
+              {googleEvents.map((event) => (
+                <article className="event-card" key={`${event.calendar_id}:${event.id}`}>
+                  <div className="event-card__main">
+                    <div className="event-card__time-block">
+                      <strong className="event-card__time">
+                        {event.all_day ? INTEGRATIONS_TEXT.allDay : formatDateTime(event.start_at)}
+                      </strong>
+                    </div>
+                    <div className="event-card__body">
+                      <strong>{event.title}</strong>
+                      {event.location ? <p>{event.location}</p> : null}
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
     </section>
   );
 }

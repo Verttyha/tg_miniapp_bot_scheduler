@@ -1,4 +1,4 @@
-import type { CalendarConnection, EventItem, Poll, SessionPayload, Workspace } from "./types";
+import type { CalendarConnection, EventItem, ExternalCalendarEvent, Poll, SessionPayload, Workspace } from "./types";
 
 const API_BASE = "/api";
 
@@ -150,6 +150,10 @@ export async function resolvePoll(pollId: number, optionId: number | null, token
 
 export async function getIntegrations(token: string): Promise<CalendarConnection[]> {
   return request<CalendarConnection[]>("/integrations", undefined, token);
+}
+
+export async function getGoogleCalendarEvents(token: string): Promise<ExternalCalendarEvent[]> {
+  return request<ExternalCalendarEvent[]>("/integrations/google/events", undefined, token);
 }
 
 export async function connectProvider(provider: "google" | "yandex", token: string): Promise<{ authorize_url: string }> {
