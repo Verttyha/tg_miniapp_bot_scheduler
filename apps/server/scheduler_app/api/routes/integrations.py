@@ -99,6 +99,8 @@ async def update_integration(
         connection = await service.update_connection(current_user, connection_id, payload)
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except PermissionDeniedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     await session.commit()
     calendars = await service.get_provider(connection.provider).list_calendars(connection)
     return connection_read(connection, calendars=calendars)
