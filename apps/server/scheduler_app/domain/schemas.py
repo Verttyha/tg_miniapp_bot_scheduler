@@ -116,6 +116,8 @@ class EventCreateRequest(BaseModel):
     def validate_participant_ids(cls, value: list[int]) -> list[int]:
         if not value:
             raise ValueError("Нужен хотя бы один участник")
+        if len(set(value)) != len(value):
+            raise ValueError("Участники не должны повторяться")
         return value
 
     @model_validator(mode="after")
@@ -143,6 +145,8 @@ class EventUpdateRequest(BaseModel):
     def validate_optional_participant_ids(cls, value: list[int] | None) -> list[int] | None:
         if value is not None and not value:
             raise ValueError("Нужен хотя бы один участник")
+        if value is not None and len(set(value)) != len(value):
+            raise ValueError("Участники не должны повторяться")
         return value
 
     @model_validator(mode="after")
@@ -195,6 +199,8 @@ class PollCreateRequest(BaseModel):
     def validate_poll_participants(cls, value: list[int]) -> list[int]:
         if not value:
             raise ValueError("Нужен хотя бы один участник")
+        if len(set(value)) != len(value):
+            raise ValueError("Участники не должны повторяться")
         return value
 
     @model_validator(mode="after")
