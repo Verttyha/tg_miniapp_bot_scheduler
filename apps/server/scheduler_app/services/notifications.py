@@ -108,13 +108,16 @@ class NotificationService:
                         json={"chat_id": job.user.telegram_user_id, "text": message},
                     )
                 except httpx.HTTPError as exc:
-                    job.status = NotificationStatus.FAILED.value
+                    job.status = NotificationStatus.PENDING.value
                     job.error_message = str(exc)
                     continue
                 if response.is_success:
                     job.status = NotificationStatus.SENT.value
                     job.sent_at = datetime.now(timezone.utc)
                     job.error_message = None
+                elif response.status_code == 429 or response.status_code >= 500:
+                    job.status = NotificationStatus.PENDING.value
+                    job.error_message = response.text
                 else:
                     job.status = NotificationStatus.FAILED.value
                     job.error_message = response.text
