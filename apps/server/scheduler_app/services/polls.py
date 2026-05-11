@@ -216,6 +216,23 @@ class PollService:
         await self._close_telegram_chat_poll(poll, raise_on_error=False)
         return await self._resolve_poll(poll, selected_option_id=payload.selected_option_id)
 
+    async def resolve_ready_polls(self) -> list[Poll]:
+        open_polls = await self.session.scalars(
+            select(Poll)
+            .where(Poll.status == PollStatus.OPEN.value)
+            .options(
+                selectinload(Poll.options),
+                selectinload(Poll.votes),
+                selectinload(Poll.telegram_chat_poll),
+            )
+        )
+        resolved: list[Poll] = []
+        for poll in open_polls:
+            next_poll = await self._resolve_if_everyone_voted(poll)
+            if next_poll.status != PollStatus.OPEN.value:
+                resolved.append(next_poll)
+        return resolved
+
     async def resolve_due_polls(self) -> list[Poll]:
         due = await self.session.scalars(
             select(Poll)

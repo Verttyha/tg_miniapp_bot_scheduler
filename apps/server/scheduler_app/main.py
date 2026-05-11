@@ -106,21 +106,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         task.add_done_callback(telegram_update_tasks.discard)
 
     async def start_telegram_polling() -> asyncio.Task[None]:
-        try:
-            await bot.delete_webhook(drop_pending_updates=False)
-        except TelegramAPIError as exc:
-            logger.warning("Telegram webhook delete before polling failed: %s", exc)
-        except Exception as exc:  # noqa: BLE001 - polling startup must survive network/proxy failures
-            logger.warning("Telegram webhook delete before polling failed with unexpected error: %s", exc)
-        task = asyncio.create_task(
-            dispatcher.start_polling(
-                bot,
-                allowed_updates=dispatcher.resolve_used_update_types(),
-                handle_signals=False,
-            )
-        )
-        logger.info("Telegram update polling started")
-        return task
+        async def polling_loop() -> None:
+            while True:
+                try:
+                    await bot.delete_webhook(drop_pending_updates=False)
+                except TelegramAPIError as exc:
+                    logger.warning("Telegram webhook delete before polling failed: %s", exc)
+                except Exception as exc:  # noqa: BLE001 - polling startup must survive network/proxy failures
+                    logger.warning("Telegram webhook delete before polling failed with unexpected error: %s", exc)
+                try:
+                    logger.info("Telegram update polling started")
+                    await dispatcher.start_polling(
+                        bot,
+                        allowed_updates=dispatcher.resolve_used_update_types(),
+                        handle_signals=False,
+                    )
+                except asyncio.CancelledError:
+                    raise
+                except Exception:  # noqa: BLE001 - keep group poll answers flowing after transient failures
+                    logger.exception("Telegram update polling stopped unexpectedly; restarting soon")
+                    await asyncio.sleep(5)
+
+        return asyncio.create_task(polling_loop())
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):

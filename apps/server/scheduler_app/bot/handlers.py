@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramAPIError
 from aiogram.filters.chat_member_updated import ADMINISTRATOR, ChatMemberUpdatedFilter, KICKED, LEFT, MEMBER
 from aiogram.filters import Command, CommandStart
@@ -462,11 +462,11 @@ def build_router(session_factory: async_sessionmaker, settings: Settings) -> Rou
         await ensure_group_workspace(message)
 
     @router.poll_answer()
-    async def poll_answer_handler(answer: PollAnswer) -> None:
+    async def poll_answer_handler(answer: PollAnswer, bot: Bot) -> None:
         if not answer.user:
             return
         async with session_factory() as session:
-            service = PollService(session, settings, cipher)
+            service = PollService(session, settings, cipher, bot=bot)
             await service.sync_telegram_poll_answer(answer)
             await session.commit()
 

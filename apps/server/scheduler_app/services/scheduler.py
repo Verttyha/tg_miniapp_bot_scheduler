@@ -49,6 +49,7 @@ class SchedulerRunner:
             async with self.session_factory() as session:
                 poll_service = PollService(session, self.settings, self.cipher, bot=self.bot)
                 notification_service = NotificationService(session, self.settings)
+                await poll_service.resolve_ready_polls()
                 await poll_service.resolve_due_polls()
                 await notification_service.dispatch_due_jobs()
                 await session.commit()
