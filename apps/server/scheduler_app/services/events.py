@@ -172,6 +172,8 @@ class EventService:
         if not membership:
             raise NotFoundError("Событие не найдено")
         ensure_admin(membership)
+        if event.status == EventStatus.CANCELLED.value:
+            return event
 
         users = [participant.user for participant in event.participants]
         for mapping in list(event.mappings):
