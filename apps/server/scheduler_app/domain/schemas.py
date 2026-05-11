@@ -5,6 +5,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from scheduler_app.domain.models import AttendanceStatus
+
 
 class UserRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -166,6 +168,14 @@ class AttendanceRecordInput(BaseModel):
     user_id: int
     status: str
     notes: str | None = None
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, value: str) -> str:
+        allowed_statuses = {status.value for status in AttendanceStatus}
+        if value not in allowed_statuses:
+            raise ValueError("Неподдерживаемый статус посещаемости")
+        return value
 
 
 class AttendanceUpdateRequest(BaseModel):
