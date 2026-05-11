@@ -253,6 +253,29 @@
   border-color: rgba(76, 178, 255, 0.24);
 }
 
+.event-card--google {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(76, 178, 255, 0.28);
+}
+
+.event-card--google::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: linear-gradient(180deg, var(--accent-strong), var(--accent));
+}
+
+.event-card__status--google {
+  background: rgba(76, 178, 255, 0.14);
+  color: var(--accent);
+}
+
+.event-card--google .event-card__time {
+  font-size: 1.35rem;
+}
+
 .event-card__participants-toggle {
   min-height: 36px;
   justify-self: start;

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
-import { completeEvent, getIntegrations, getWorkspaceEvents, getWorkspacePolls } from "../api";
+import { completeEvent, getGoogleCalendarEvents, getIntegrations, getWorkspaceEvents, getWorkspacePolls } from "../api";
 import { EventCard } from "../components/dashboard/event-card";
 import { ProviderLinkCard } from "../components/dashboard/provider-link-card";
 import { WORKSPACE_STORAGE_KEY } from "../lib/constants";
@@ -9,12 +9,18 @@ import {
   countPollVotes,
   formatCurrentDate,
   formatDateTime,
+  formatEventDay,
+  formatTime,
   translateConnectionStatus
 } from "../lib/formatters";
 import { isWorkspaceAdmin, parseWorkspaceId } from "../lib/workspace";
-import type { CalendarConnection, EventItem, Poll, SessionPayload } from "../types";
+import type { CalendarConnection, EventItem, ExternalCalendarEvent, Poll, SessionPayload } from "../types";
 
 const PROVIDERS = ["google", "yandex"] as const;
+
+type DashboardScheduleItem =
+  | { key: string; kind: "workspace"; startAt: string; event: EventItem }
+  | { key: string; kind: "google"; startAt: string; event: ExternalCalendarEvent };
 
 const DASHBOARD_TEXT = {
   loadWorkspaceError:
@@ -43,7 +49,9 @@ const DASHBOARD_TEXT = {
   completeEventError:
     "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u044c \u0441\u043e\u0431\u044b\u0442\u0438\u0435",
   noEvents:
-    "\u041f\u043e\u043a\u0430 \u043d\u0435\u0442 \u0430\u043a\u0442\u0438\u0432\u043d\u044b\u0445 \u0441\u043e\u0431\u044b\u0442\u0438\u0439. \u0421\u043e\u0437\u0434\u0430\u0439\u0442\u0435 \u043f\u0435\u0440\u0432\u043e\u0435 \u0441\u043e\u0431\u044b\u0442\u0438\u0435 \u0438 \u043e\u043d\u043e \u043f\u043e\u044f\u0432\u0438\u0442\u0441\u044f \u0432 \u0434\u0430\u0448\u0431\u043e\u0440\u0434\u0435.",
+    "\u041f\u043e\u043a\u0430 \u043d\u0435\u0442 \u0430\u043a\u0442\u0438\u0432\u043d\u044b\u0445 \u0441\u043e\u0431\u044b\u0442\u0438\u0439. \u0421\u043e\u0437\u0434\u0430\u0439\u0442\u0435 \u043f\u0435\u0440\u0432\u043e\u0435 \u0441\u043e\u0431\u044b\u0442\u0438\u0435 \u0438\u043b\u0438 \u043f\u043e\u0434\u043a\u043b\u044e\u0447\u0438\u0442\u0435 Google Calendar.",
+  googleSource: "Google",
+  allDay: "\u0412\u0435\u0441\u044c \u0434\u0435\u043d\u044c",
   completedEventsTitle: "\u0417\u0430\u0432\u0435\u0440\u0448\u0451\u043d\u043d\u044b\u0435 \u0441\u043e\u0431\u044b\u0442\u0438\u044f",
   completedEventsSubtitle:
     "\u0421\u043f\u0438\u0441\u043e\u043a \u0441\u043e\u0431\u044b\u0442\u0438\u0439, \u043a\u043e\u0442\u043e\u0440\u044b\u0435 \u0430\u0434\u043c\u0438\u043d \u0443\u0436\u0435 \u043e\u0442\u043c\u0435\u0442\u0438\u043b \u043a\u0430\u043a \u0437\u0430\u0432\u0435\u0440\u0448\u0451\u043d\u043d\u044b\u0435.",
@@ -74,6 +82,7 @@ export function DashboardHomePage({ token, session }: { token: string; session: 
     return parseWorkspaceId(localStorage.getItem(WORKSPACE_STORAGE_KEY)) ?? session.workspaces[0]?.id ?? null;
   });
   const [events, setEvents] = useState<EventItem[]>([]);
+  const [googleEvents, setGoogleEvents] = useState<ExternalCalendarEvent[]>([]);
   const [polls, setPolls] = useState<Poll[]>([]);
   const [connections, setConnections] = useState<CalendarConnection[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -113,8 +122,9 @@ export function DashboardHomePage({ token, session }: { token: string; session: 
 
     (async () => {
       try {
-        const [eventData, pollData, connectionData] = await Promise.all([
+        const [eventData, googleEventData, pollData, connectionData] = await Promise.all([
           getWorkspaceEvents(workspaceDataId, token),
+          getGoogleCalendarEvents(token).catch(() => []),
           getWorkspacePolls(workspaceDataId, token),
           getIntegrations(token).catch(() => []),
         ]);
@@ -125,6 +135,7 @@ export function DashboardHomePage({ token, session }: { token: string; session: 
           return;
         }
         setEvents(eventData);
+        setGoogleEvents(googleEventData);
         setPolls(pollData);
         setConnections(connectionData);
         setError(null);
@@ -168,8 +179,22 @@ export function DashboardHomePage({ token, session }: { token: string; session: 
   const completedEvents = visibleEvents
     .filter((event) => event.status === "completed")
     .sort((left, right) => new Date(right.start_at).getTime() - new Date(left.start_at).getTime());
-  const upcomingEvents = [...scheduledEvents]
-    .sort((left, right) => new Date(left.start_at).getTime() - new Date(right.start_at).getTime())
+  const scheduledItems: DashboardScheduleItem[] = [
+    ...scheduledEvents.map((event) => ({
+      key: `workspace:${event.id}`,
+      kind: "workspace" as const,
+      startAt: event.start_at,
+      event,
+    })),
+    ...googleEvents.map((event) => ({
+      key: `google:${event.calendar_id}:${event.id}`,
+      kind: "google" as const,
+      startAt: event.start_at,
+      event,
+    })),
+  ];
+  const upcomingEvents = scheduledItems
+    .sort((left, right) => new Date(left.startAt).getTime() - new Date(right.startAt).getTime())
     .slice(0, 4);
   const featuredEvent = upcomingEvents[0] ?? null;
   const secondaryEvents = featuredEvent ? upcomingEvents.slice(1) : [];
@@ -200,10 +225,37 @@ export function DashboardHomePage({ token, session }: { token: string; session: 
     }
   }
 
-  function renderScheduledEventCard(event: EventItem, featured = false) {
+  function renderGoogleEventCard(event: ExternalCalendarEvent, featured = false) {
+    return (
+      <article className={`event-card event-card--google ${featured ? "event-card--featured" : ""}`.trim()}>
+        <div className="event-card__main">
+          <div className="event-card__time-block">
+            <div className="event-card__time">{event.all_day ? DASHBOARD_TEXT.allDay : formatTime(event.start_at)}</div>
+            <span className="event-card__date">{formatEventDay(event.start_at)}</span>
+          </div>
+          <div className="event-card__body">
+            <strong>{event.title}</strong>
+            <span>{event.location ?? DASHBOARD_TEXT.googleSource}</span>
+            {event.description ? <p>{event.description}</p> : null}
+          </div>
+          <div className="event-card__aside">
+            <span className="event-card__pill">{DASHBOARD_TEXT.googleSource}</span>
+            <span className="event-card__status event-card__status--google">{DASHBOARD_TEXT.googleSource}</span>
+          </div>
+        </div>
+      </article>
+    );
+  }
+
+  function renderScheduledEventCard(item: DashboardScheduleItem, featured = false) {
+    if (item.kind === "google") {
+      return <div className="dashboard-event-row" key={item.key}>{renderGoogleEventCard(item.event, featured)}</div>;
+    }
+
+    const event = item.event;
     const isCompleting = completingEventIds.includes(event.id);
     return (
-      <div className="dashboard-event-row" key={event.id}>
+      <div className="dashboard-event-row" key={item.key}>
         <EventCard
           canManageWorkspace={canManageWorkspace}
           defaultParticipantsExpanded={featured}
@@ -260,7 +312,7 @@ export function DashboardHomePage({ token, session }: { token: string; session: 
           </article>
           <article className="metric-card">
             <span>{DASHBOARD_TEXT.events}</span>
-            <strong>{visibleEvents.length}</strong>
+            <strong>{visibleEvents.length + googleEvents.length}</strong>
           </article>
 
           {canManageWorkspace ? (
@@ -292,7 +344,7 @@ export function DashboardHomePage({ token, session }: { token: string; session: 
                 <h2 className="panel-title">{DASHBOARD_TEXT.upcomingEventsTitle}</h2>
                 <p className="panel-subtitle">{DASHBOARD_TEXT.upcomingEventsSubtitle}</p>
               </div>
-              <span className="panel-badge panel-badge--soft">{scheduledEvents.length}</span>
+              <span className="panel-badge panel-badge--soft">{scheduledItems.length}</span>
             </div>
 
             <div className="dashboard-events">
