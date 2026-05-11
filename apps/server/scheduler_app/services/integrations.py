@@ -91,6 +91,9 @@ class IntegrationService:
                     await self.ensure_fresh_connection(connection)
                     if connection.status == ConnectionStatus.ACTIVE.value:
                         calendars = await self.get_provider(connection.provider).list_calendars(connection)
+                        if not calendars:
+                            connection.status = ConnectionStatus.ERROR.value
+                            await self.session.flush()
                 except (httpx.HTTPError, SecurityError):
                     connection.status = ConnectionStatus.ERROR.value
                     await self.session.flush()

@@ -12,6 +12,7 @@ from scheduler_app.core.settings import Settings
 from scheduler_app.domain.models import (
     AttendanceRecord,
     AttendanceStatus,
+    ConnectionStatus,
     Event,
     EventParticipant,
     EventStatus,
@@ -289,6 +290,11 @@ class EventService:
                         )
                     )
             except Exception as exc:  # pragma: no cover - external API fallback
+                connection.status = ConnectionStatus.ERROR.value
+                connection.provider_metadata = self._provider_metadata_with_last_error(
+                    connection.provider_metadata,
+                    str(exc),
+                )
                 if mapping:
                     mapping.sync_status = SyncStatus.ERROR.value
                     mapping.last_error = str(exc)
@@ -302,10 +308,20 @@ class EventService:
         try:
             await provider.delete_event(connection, mapping)
         except Exception as exc:  # pragma: no cover - external API fallback
+            connection.status = ConnectionStatus.ERROR.value
+            connection.provider_metadata = self._provider_metadata_with_last_error(
+                connection.provider_metadata,
+                str(exc),
+            )
             mapping.sync_status = SyncStatus.ERROR.value
             mapping.last_error = str(exc)
         else:
             await self.session.delete(mapping)
+
+    def _provider_metadata_with_last_error(self, metadata: dict | None, error: str) -> dict:
+        next_metadata = dict(metadata or {})
+        next_metadata["last_error"] = error[:500]
+        return next_metadata
 
     async def _workspace_members_map(self, workspace_id: int) -> dict[int, User]:
         members = await self.session.scalars(
