@@ -133,6 +133,10 @@ def validate_telegram_init_data(raw_init_data: str, bot_token: str, max_age_seco
         raise SecurityError("Telegram init data user is invalid") from exc
     if not isinstance(user_payload, dict) or "id" not in user_payload:
         raise SecurityError("Telegram init data user id is missing")
+    try:
+        int(user_payload["id"])
+    except (TypeError, ValueError) as exc:
+        raise SecurityError("Telegram init data user id is invalid") from exc
     return TelegramInitData(
         raw=raw_init_data,
         user=user_payload,
