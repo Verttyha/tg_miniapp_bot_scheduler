@@ -78,7 +78,10 @@ async def connect_yandex(
     cipher: TokenCipher = Depends(get_cipher),
 ) -> IntegrationLinkResponse:
     service = IntegrationService(session, settings, cipher)
-    url = await service.build_connect_link(current_user, "yandex")
+    try:
+        url = await service.build_connect_link(current_user, "yandex")
+    except ServiceError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return IntegrationLinkResponse(authorize_url=url, provider="yandex")
 
 

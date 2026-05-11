@@ -39,6 +39,8 @@ class IntegrationService:
     async def build_connect_link(self, user: User, provider: str) -> str:
         if provider == "google" and (not self.settings.google_client_id or not self.settings.google_client_secret):
             raise ServiceError("Интеграция Google не настроена. Укажите GOOGLE_CLIENT_ID и GOOGLE_CLIENT_SECRET.")
+        if provider == "yandex" and (not self.settings.yandex_client_id or not self.settings.yandex_client_secret):
+            raise ServiceError("Интеграция Yandex не настроена. Укажите YANDEX_CLIENT_ID и YANDEX_CLIENT_SECRET.")
         state = build_oauth_state(user.id, provider, self.settings.app_secret)
         return await self.get_provider(provider).build_authorize_url(state)
 
