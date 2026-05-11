@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
-import { getPoll, resolvePoll, voteOnPoll } from "../api";
+import { useNavigate, useParams } from "react-router-dom";
+import { deletePoll, getPoll, resolvePoll, voteOnPoll } from "../api";
 import { ScreenHeader } from "../components/layout/screen-header";
 import { countPollVotes, formatDateTime, translatePollStatus } from "../lib/formatters";
 import { isWorkspaceAdmin } from "../lib/workspace";
@@ -10,6 +10,7 @@ const POLL_PAGE_TEXT = {
   loadError: "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u0433\u043e\u043b\u043e\u0441\u043e\u0432\u0430\u043d\u0438\u0435",
   voteError: "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0441\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u0433\u043e\u043b\u043e\u0441",
   resolveError: "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u044c \u0433\u043e\u043b\u043e\u0441\u043e\u0432\u0430\u043d\u0438\u0435",
+  deleteError: "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0443\u0434\u0430\u043b\u0438\u0442\u044c \u0433\u043e\u043b\u043e\u0441\u043e\u0432\u0430\u043d\u0438\u0435",
   eyebrow: "\u0413\u043e\u043b\u043e\u0441\u043e\u0432\u0430\u043d\u0438\u0435",
   loadingTitle: "\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430 \u0433\u043e\u043b\u043e\u0441\u043e\u0432\u0430\u043d\u0438\u044f",
   loadingOptions: "\u041f\u043e\u0434\u0433\u0440\u0443\u0436\u0430\u044e \u0432\u0430\u0440\u0438\u0430\u043d\u0442\u044b...",
@@ -24,14 +25,19 @@ const POLL_PAGE_TEXT = {
   resolveButton:
     "\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u044c \u0433\u043e\u043b\u043e\u0441\u043e\u0432\u0430\u043d\u0438\u0435 \u0432\u044b\u0431\u0440\u0430\u043d\u043d\u044b\u043c \u0432\u0430\u0440\u0438\u0430\u043d\u0442\u043e\u043c",
   adminResolveOnly:
-    "\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u044c \u0433\u043e\u043b\u043e\u0441\u043e\u0432\u0430\u043d\u0438\u0435 \u043c\u043e\u0436\u0435\u0442 \u0442\u043e\u043b\u044c\u043a\u043e \u0430\u0434\u043c\u0438\u043d\u0438\u0441\u0442\u0440\u0430\u0442\u043e\u0440 \u0447\u0430\u0442\u0430."
+    "\u0417\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u044c \u0433\u043e\u043b\u043e\u0441\u043e\u0432\u0430\u043d\u0438\u0435 \u043c\u043e\u0436\u0435\u0442 \u0442\u043e\u043b\u044c\u043a\u043e \u0430\u0434\u043c\u0438\u043d\u0438\u0441\u0442\u0440\u0430\u0442\u043e\u0440 \u0447\u0430\u0442\u0430.",
+  deleteButton: "\u0423\u0434\u0430\u043b\u0438\u0442\u044c \u0433\u043e\u043b\u043e\u0441\u043e\u0432\u0430\u043d\u0438\u0435",
+  deletingButton: "\u0423\u0434\u0430\u043b\u044f\u044e...",
+  deleteConfirm: "\u0423\u0434\u0430\u043b\u0438\u0442\u044c \u0433\u043e\u043b\u043e\u0441\u043e\u0432\u0430\u043d\u0438\u0435?"
 };
 
 export function PollPage({ token, session }: { token: string; session: SessionPayload }) {
   const { pollId } = useParams();
+  const navigate = useNavigate();
   const [poll, setPoll] = useState<Poll | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedResolveOptionId, setSelectedResolveOptionId] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!pollId) {
@@ -76,6 +82,23 @@ export function PollPage({ token, session }: { token: string; session: SessionPa
       setPoll(await resolvePoll(poll.id, selectedResolveOptionId, token));
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : POLL_PAGE_TEXT.resolveError);
+    }
+  }
+
+  async function handleDelete() {
+    if (!poll) {
+      return;
+    }
+    if (!window.confirm(POLL_PAGE_TEXT.deleteConfirm)) {
+      return;
+    }
+    setDeleting(true);
+    try {
+      await deletePoll(poll.id, token);
+      navigate(`/workspaces/${poll.workspace_id}`, { replace: true });
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : POLL_PAGE_TEXT.deleteError);
+      setDeleting(false);
     }
   }
 
@@ -159,6 +182,16 @@ export function PollPage({ token, session }: { token: string; session: SessionPa
             ) : (
               <div className="status-banner status-banner--muted">{POLL_PAGE_TEXT.adminResolveOnly}</div>
             )
+          ) : null}
+          {canManageWorkspace ? (
+            <button
+              className="action-pill action-pill--ghost action-pill--danger"
+              disabled={deleting}
+              type="button"
+              onClick={handleDelete}
+            >
+              {deleting ? POLL_PAGE_TEXT.deletingButton : POLL_PAGE_TEXT.deleteButton}
+            </button>
           ) : null}
         </>
       )}

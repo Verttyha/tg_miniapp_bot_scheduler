@@ -70,6 +70,27 @@ async def get_poll(
     return poll_read(poll, user_vote_option_id=user_vote)
 
 
+@router.delete("/polls/{poll_id}", response_model=PollRead)
+async def delete_poll(
+    poll_id: int,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+    cipher: TokenCipher = Depends(get_cipher),
+    bot: Bot = Depends(get_bot),
+) -> PollRead:
+    service = PollService(session, settings, cipher, bot=bot)
+    try:
+        poll = await service.delete_poll(current_user, poll_id)
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except PermissionDeniedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    payload = poll_read(poll)
+    await session.commit()
+    return payload
+
+
 @router.post("/polls/{poll_id}/vote", response_model=PollRead)
 async def vote_on_poll(
     poll_id: int,

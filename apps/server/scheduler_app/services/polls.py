@@ -14,7 +14,7 @@ from sqlalchemy.orm import selectinload
 from scheduler_app.bot.service import ensure_telegram_user
 from scheduler_app.core.security import TokenCipher
 from scheduler_app.core.settings import Settings
-from scheduler_app.domain.models import Poll, PollOption, PollStatus, TelegramChatPoll, User, Vote, Workspace, WorkspaceMember
+from scheduler_app.domain.models import Event, Poll, PollOption, PollStatus, TelegramChatPoll, User, Vote, Workspace, WorkspaceMember
 from scheduler_app.domain.schemas import EventCreateRequest, PollCreateRequest, PollResolveRequest, VoteRequest
 from scheduler_app.services.common import NotFoundError, PermissionDeniedError, ServiceError, ensure_admin, get_workspace_member
 from scheduler_app.services.events import EventService
@@ -134,6 +134,24 @@ class PollService:
             vote.option_id = payload.option_id
         await self.session.flush()
         return await self._load_poll(poll.id)
+
+    async def delete_poll(self, actor: User, poll_id: int) -> Poll:
+        poll = await self._load_poll(poll_id)
+        membership = await get_workspace_member(self.session, poll.workspace_id, actor.id)
+        if not membership:
+            raise NotFoundError("\u0413\u043e\u043b\u043e\u0441\u043e\u0432\u0430\u043d\u0438\u0435 \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u043e")
+        ensure_admin(membership)
+
+        await self._close_telegram_chat_poll(poll, raise_on_error=False)
+        if poll.resulting_event_id:
+            event = await self.session.scalar(select(Event).where(Event.id == poll.resulting_event_id))
+            if event:
+                event.poll_id = None
+        poll.selected_option_id = None
+        poll.resulting_event_id = None
+        await self.session.flush()
+        await self.session.delete(poll)
+        return poll
 
     async def sync_telegram_poll_answer(self, answer: PollAnswer) -> Poll | None:
         if not answer.user:

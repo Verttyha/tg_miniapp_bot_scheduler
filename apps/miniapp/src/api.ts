@@ -134,6 +134,10 @@ export async function getPoll(pollId: number, token: string): Promise<Poll> {
   return request<Poll>(`/polls/${pollId}`, undefined, token);
 }
 
+export async function deletePoll(pollId: number, token: string): Promise<Poll> {
+  return request<Poll>(`/polls/${pollId}`, { method: "DELETE" }, token);
+}
+
 export async function voteOnPoll(pollId: number, optionId: number, token: string): Promise<Poll> {
   return request<Poll>(`/polls/${pollId}/vote`, {
     method: "POST",
