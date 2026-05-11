@@ -13,6 +13,7 @@ from aiogram.exceptions import TelegramAPIError
 from aiogram.enums import ParseMode
 from aiogram.types import BotCommand, BotCommandScopeAllGroupChats, BotCommandScopeAllPrivateChats, Update
 from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
@@ -143,6 +144,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await engine.dispose()
 
     app = FastAPI(title=runtime_settings.app_name, lifespan=lifespan)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            runtime_settings.base_url.rstrip("/"),
+            "http://localhost:8000",
+            "http://127.0.0.1:8000",
+        ],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     app.state.settings = runtime_settings
     app.state.engine = engine
     app.state.session_factory = session_factory
