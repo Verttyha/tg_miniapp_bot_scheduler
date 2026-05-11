@@ -69,6 +69,8 @@ class PollService:
         if not workspace:
             raise NotFoundError("Рабочее пространство не найдено")
 
+        await self._resolve_participants(workspace_id, payload.participant_ids)
+
         poll = Poll(
             workspace_id=workspace_id,
             created_by_user_id=actor.id,
@@ -325,6 +327,21 @@ class PollService:
             await self.bot.send_message(chat_id=chat_poll.telegram_chat_id, text=text)
         except TelegramAPIError:
             logger.exception("Failed to send Telegram chat message for poll %s", poll.id)
+
+    async def _resolve_participants(self, workspace_id: int, participant_ids: list[int]) -> list[User]:
+        members = await self.session.scalars(
+            select(WorkspaceMember)
+            .where(WorkspaceMember.workspace_id == workspace_id)
+            .options(selectinload(WorkspaceMember.user))
+        )
+        users_by_id = {member.user_id: member.user for member in members}
+        participants: list[User] = []
+        for participant_id in participant_ids:
+            participant = users_by_id.get(participant_id)
+            if not participant:
+                raise NotFoundError(f"Участник {participant_id} не входит в это рабочее пространство")
+            participants.append(participant)
+        return participants
 
     async def _poll_participants(self, poll: Poll) -> list[User]:
         members = await self.session.scalars(
